@@ -2,6 +2,7 @@
 
 mod app;
 mod components;
+mod fs;
 mod markdown;
 mod model;
 mod styles;

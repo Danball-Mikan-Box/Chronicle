@@ -2,72 +2,82 @@
 
 ## 概要
 Dioxus (Rust) + Markdown を用いた小説執筆に特化したデスクトップアプリケーション。
-Obsidian のようなライブプレビュー + 小説向け機能（縦書き/横書き切替、プロジェクト管理、章構成）を提供する。
+Obsidian のようなライブプレビュー + 小説向け機能（縦書き/横書き切替、プロジェクト管理、章構成、書式ツールバー）を提供する。
 
 ## 技術スタック
-- **フレームワーク**: Dioxus 0.6 (desktop)
+- **フレームワーク**: Dioxus 0.6 (desktop, wry WebView)
 - **言語**: Rust
-- **Markdown パース**: pulldown-cmark / comrak
-- **Markdown レンダリング**: 自前 or Dioxus コンポーネント
+- **Markdown パース**: pulldown-cmark
 - **状態管理**: Dioxus Signals
-- **ファイル管理**: プロジェクト単位でディレクトリ構造
+- **ファイル管理**: プロジェクト単位でディレクトリ構造 (JSON + Markdown)
+- **ファイルダイアログ**: rfd (Rust File Dialog)
 - **スタイル**: CSS (vertical-rl / horizontal-tb 切替)
 
-## ディレクトリ構成計画
+## ディレクトリ構成
 ```
 chronicle/
 ├── src/
-│   ├── main.rs          # エントリポイント
-│   ├── app.rs           # メインアプリコンポーネント
-│   ├── components/      # UI コンポーネント
-│   │   ├── editor.rs    # Markdown エディタ
-│   │   ├── preview.rs   # プレビュー表示
-│   │   ├── sidebar.rs   # プロジェクト/章ツリー
-│   │   └── toolbar.rs   # ツールバー
-│   ├── model/           # データモデル
-│   │   ├── project.rs   # プロジェクト構造
-│   │   └── chapter.rs   # 章/話構造
-│   ├── markdown/        # Markdown 処理
-│   │   ├── parser.rs    # パース
-│   │   └── renderer.rs  # レンダリング
-│   └── styles/          # CSS
-│       └── main.css
+│   ├── main.rs              # エントリポイント
+│   ├── app.rs               # メインアプリ (全状態管理)
+│   ├── components/
+│   │   ├── editor.rs        # Markdown エディタ + 書式ツールバー統合
+│   │   ├── preview.rs       # リアルタイムプレビュー
+│   │   ├── sidebar.rs       # プロジェクト/章ツリー
+│   │   ├── toolbar.rs       # ツールバー (縦横切替、文字数、統計)
+│   │   ├── formatting_bar.rs# 書式ツールバー (太字、斜体、見出し等)
+│   │   └── dialog.rs        # プロジェクト作成ダイアログ
+│   ├── fs/
+│   │   ├── project.rs       # プロジェクトファイル操作
+│   │   └── chapter.rs       # チャプターファイル操作
+│   ├── model/
+│   │   └── project.rs       # プロジェクト/章データモデル
+│   ├── markdown/
+│   │   ├── parser.rs        # pulldown-cmark パース
+│   │   └── renderer.rs      # HTML レンダリング + ルビ前処理
+│   └── styles/
+│       └── main.css         # 全スタイル
 ├── Cargo.toml
+├── PLAN.md
 └── README.md
 ```
 
-## フェーズ分け
+## 実装済み機能
 
-### Phase 1: プロジェクト基盤 (今回)
-- Dioxus プロジェクトのセットアップ
-- ウィンドウ表示
-- 最小限の UI レイアウト
+### Phase 1: プロジェクト基盤
+- [x] Dioxus プロジェクトセットアップ
+- [x] ウィンドウ表示 (Desktop)
+- [x] 3ペインレイアウト (サイドバー / エディタ / プレビュー)
 
 ### Phase 2: エディタ + プレビュー
-- Markdown エディタ (CodeMirror or textarea)
-- リアルタイムプレビュー
-- ファイル保存/読込
+- [x] Markdown エディタ (textarea)
+- [x] 書式ツールバー (太字、斜体、見出し、引用、箇条書き、リンク、ルビ、区切り線)
+- [x] リアルタイムHTMLプレビュー
+- [x] ルビ対応 ({漢字|かんじ} → `<ruby>`)
 
 ### Phase 3: プロジェクト管理
-- プロジェクト作成/開く
-- 章・話のツリー表示
-- ファイルシステムとの同期
+- [x] プロジェクト作成 (rfdファイルダイアログ)
+- [x] プロジェクトを開く
+- [x] 章の追加/削除
+- [x] ファイル保存/読込 (chronicle.json + chapters/*.md)
+- [x] 自動セーブ（章切り替え時に保存）
+- [x] 保存通知
 
 ### Phase 4: 縦書き/横書き対応
-- CSS writing-mode 切替
-- ルビ対応
-- 原稿用紙スタイル
+- [x] CSS writing-mode 切替 (縦書/横書ボタン)
+- [x] 原稿用紙風スタイル
+- [x] ルビ対応 (furigana)
 
-### Phase 5: 小説特化機能
-- 文字数カウント
-- 目標文字数設定
-- 執筆統計
-- エクスポート (PDF/EPUB)
-- テンプレート
+### Phase 5: 執筆補助機能
+- [x] 文字数カウント（空白除く）
+- [x] 目標文字数進捗バー
+- [x] 読了時間表示
+- [x] 統計表示 (ツールバー右側)
 
-## Phase 1 タスク
-- [x] 開発計画作成
-- [ ] Git リポジトリ初期化
-- [ ] Cargo プロジェクト作成
-- [ ] Dioxus 依存追加
-- [ ] 最小限のアプリ表示
+### 未実装（将来）
+- [ ] エクスポート (PDF/EPUB/TXT)
+- [ ] テンプレート
+- [ ] 執筆統計 (日別/週別グラフ)
+- [ ] ダークモード
+- [ ] スペルチェック
+- [ ] キーボードショートカット
+- [ ] 全文検索
