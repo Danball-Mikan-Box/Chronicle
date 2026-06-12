@@ -59,3 +59,55 @@ pub fn ProjectDialog(
         }
     }
 }
+
+#[component]
+pub fn RenameDialog(
+    visible: Signal<bool>,
+    file_name: Signal<(String, String)>,
+    on_confirm: EventHandler<(String, String)>,
+) -> Element {
+    if !*visible.read() {
+        return Ok(VNode::placeholder());
+    }
+
+    let target = file_name.read().clone();
+    let old_name = target.0.clone();
+    let current_title = target.1.clone();
+    let mut new_title = use_signal(|| current_title.clone());
+
+    rsx! {
+        div { class: "dialog-overlay",
+            div { class: "dialog",
+                h2 { "章名の変更" }
+                div { class: "dialog-body",
+                    label { "新しい章名" }
+                    input {
+                        class: "dialog-input",
+                        value: "{new_title}",
+                        oninput: move |e| new_title.set(e.value()),
+                        placeholder: "章名を入力",
+                    }
+                }
+                div { class: "dialog-actions",
+                    button {
+                        class: "dialog-btn",
+                        onclick: move |_| visible.set(false),
+                        "キャンセル"
+                    }
+                    button {
+                        class: "dialog-btn primary",
+                        disabled: new_title.read().is_empty(),
+                        onclick: move |_| {
+                            let t = new_title.read().clone();
+                            if !t.is_empty() {
+                                on_confirm.call((old_name.clone(), t));
+                                visible.set(false);
+                            }
+                        },
+                        "変更"
+                    }
+                }
+            }
+        }
+    }
+}

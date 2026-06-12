@@ -21,7 +21,7 @@ impl Project {
 
     pub fn add_chapter(&mut self, title: &str) -> ChapterEntry {
         let order = self.chapters.len();
-        let safe_name = title.chars().take(20).collect::<String>()
+        let safe_name: String = title.chars().take(20).collect::<String>()
             .replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "");
         let file_name = format!("{:02}-{}.md", order + 1, safe_name.replace(' ', "-"));
         let entry = ChapterEntry {
@@ -32,6 +32,17 @@ impl Project {
         };
         self.chapters.push(entry.clone());
         entry
+    }
+
+    pub fn rename_chapter(&mut self, old_file_name: &str, new_title: &str) -> Option<String> {
+        let entry = self.chapters.iter_mut().find(|c| c.file_name == old_file_name)?;
+        let safe_name: String = new_title.chars().take(20).collect::<String>()
+            .replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "");
+        let new_file_name = format!("{:02}-{}.md", entry.order + 1, safe_name.replace(' ', "-"));
+        entry.title = new_title.to_string();
+        let old = entry.file_name.clone();
+        entry.file_name = new_file_name.clone();
+        Some(old)
     }
 
     pub fn remove_chapter(&mut self, file_name: &str) {

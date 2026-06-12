@@ -142,13 +142,42 @@ fn build_format_js(kind: FormatKind) -> &'static str {
     }
 }
 
+fn keyboard_shortcut_js(key: &str) -> &'static str {
+    match key {
+        "b" => build_format_js(FormatKind::Bold),
+        "i" => build_format_js(FormatKind::Italic),
+        _ => "",
+    }
+}
+
 #[component]
-pub fn Editor(content: Signal<String>) -> Element {
+pub fn Editor(content: Signal<String>, on_save: EventHandler<()>) -> Element {
     let desktop = dioxus_core::prelude::consume_context::<DesktopContext>();
+
+    let desktop2 = desktop.clone();
 
     let on_format = move |kind: FormatKind| {
         let js = build_format_js(kind);
         let _ = desktop.webview.evaluate_script(js);
+    };
+
+    let on_keydown = move |evt: Event<KeyboardData>| {
+        if evt.modifiers().contains(Modifiers::CONTROL) {
+            match evt.key() {
+                Key::Character(c) if c.as_str() == "s" => {
+                    on_save.call(());
+                }
+                Key::Character(c) if c.as_str() == "b" => {
+                    let js = keyboard_shortcut_js("b");
+                    let _ = desktop2.webview.evaluate_script(js);
+                }
+                Key::Character(c) if c.as_str() == "i" => {
+                    let js = keyboard_shortcut_js("i");
+                    let _ = desktop2.webview.evaluate_script(js);
+                }
+                _ => {}
+            }
+        }
     };
 
     rsx! {
@@ -158,7 +187,8 @@ pub fn Editor(content: Signal<String>) -> Element {
                 class: "editor",
                 value: "{content}",
                 oninput: move |evt| content.set(evt.value()),
-                placeholder: "ここに物語を書いてください...",
+                onkeydown: on_keydown,
+                placeholder: "ここに物語を書いてください...\nCtrl+S: 保存  Ctrl+B: 太字  Ctrl+I: 斜体",
             }
         }
     }

@@ -10,6 +10,9 @@ pub fn Toolbar(
     on_new_project: EventHandler<()>,
     on_open_project: EventHandler<()>,
     on_save: EventHandler<()>,
+    on_export: EventHandler<()>,
+    on_toggle_dark: EventHandler<()>,
+    is_dark: bool,
 ) -> Element {
     let text = content.read().clone();
     let char_count = text.chars().filter(|c| !c.is_whitespace()).count();
@@ -64,6 +67,17 @@ pub fn Toolbar(
                     class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn active" } else { "toolbar-btn" },
                     onclick: move |_| writing_mode.set(WritingMode::Horizontal),
                     "横書"
+                }
+                span { class: "separator" }
+                button {
+                    class: "toolbar-btn",
+                    onclick: move |_| on_export.call(()),
+                    "出力"
+                }
+                button {
+                    class: if is_dark { "toolbar-btn active" } else { "toolbar-btn" },
+                    onclick: move |_| on_toggle_dark.call(()),
+                    if is_dark { "\u{2601}" } else { "\u{2600}" }
                 }
             }
             div { class: "toolbar-right",
