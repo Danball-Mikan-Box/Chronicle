@@ -62,6 +62,10 @@ html, body {
     overflow: hidden;
 }
 
+input, textarea, button {
+    font-family: inherit;
+}
+
 .app {
     display: flex;
     flex-direction: column;
@@ -79,6 +83,7 @@ html, body {
     gap: 12px;
     user-select: none;
     -webkit-user-select: none;
+    flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -116,7 +121,6 @@ html, body {
     cursor: pointer;
     font-size: 12px;
     color: var(--text-secondary);
-    font-family: inherit;
 }
 
 .toolbar-btn:hover {
@@ -134,6 +138,24 @@ html, body {
     height: 20px;
     background: var(--border);
     margin: 0 6px;
+}
+
+.font-size-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.font-size-controls button {
+    padding: 4px 8px;
+}
+
+.font-size-value {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 24px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 .toolbar-right {
@@ -191,7 +213,7 @@ html, body {
 /* Sidebar */
 .sidebar {
     width: 240px;
-    min-width: 240px;
+    flex-shrink: 0;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--sidebar-border);
     display: flex;
@@ -326,7 +348,6 @@ html, body {
     cursor: pointer;
     font-size: 12px;
     color: var(--text-muted);
-    font-family: inherit;
 }
 
 .sidebar-action-btn:hover {
@@ -363,7 +384,37 @@ html, body {
     color: var(--text-secondary);
 }
 
+.sidebar.hidden {
+    display: none;
+}
+
+/* Resize handles */
+.resize-handle {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+    background: var(--border);
+}
+
 /* Editor */
+.editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+}
+
+.editor-pane.hidden {
+    display: none;
+}
+
 .editor-wrapper {
     flex: 1;
     display: flex;
@@ -373,29 +424,64 @@ html, body {
 
 .format-bar {
     display: flex;
+    align-items: center;
     gap: 2px;
-    padding: 6px 12px;
+    padding: 4px 12px;
     background: var(--bg-toolbar);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.fmt-group-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    padding: 0 2px;
+    letter-spacing: 0.5px;
 }
 
 .fmt-btn {
-    padding: 4px 8px;
+    padding: 3px 7px;
     border: 1px solid transparent;
     border-radius: 3px;
     background: transparent;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
-    font-family: inherit;
-    min-width: 28px;
-    text-align: center;
+    white-space: nowrap;
 }
 
 .fmt-btn:hover {
     background: var(--bg-hover);
     border-color: var(--border);
+}
+
+.fmt-btn.active {
+    background: var(--bg-active);
+    color: var(--text-active);
+}
+
+.fmt-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    margin: 0 4px;
+}
+
+.fmt-help {
+    padding: 10px 16px;
+    background: var(--bg-dialog);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.fmt-help p {
+    margin-bottom: 2px;
 }
 
 .editor {
@@ -418,10 +504,16 @@ html, body {
 
 /* Preview */
 .preview-pane {
-    flex: 1;
+    flex: 0 0 auto;
+    width: 400px;
+    min-width: 200px;
     overflow-y: auto;
     padding: 32px 40px;
     background: var(--bg-preview);
+}
+
+.preview-pane.hidden {
+    display: none;
 }
 
 .preview {
@@ -573,6 +665,29 @@ html, body {
     color: var(--border);
 }
 
+/* Focus mode */
+.main-content.focus-mode .sidebar {
+    display: none !important;
+}
+
+.main-content.focus-mode .preview-pane {
+    display: none !important;
+}
+
+.main-content.focus-mode .resize-handle {
+    display: none !important;
+}
+
+.main-content.focus-mode .editor-pane {
+    max-width: 800px;
+    margin: 0 auto;
+    flex: 1;
+}
+
+.main-content.focus-mode .editor-wrapper {
+    border-right: none;
+}
+
 /* Dialog */
 .dialog-overlay {
     position: fixed;
@@ -618,7 +733,6 @@ html, body {
     border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 14px;
-    font-family: inherit;
     background: var(--bg-editor);
     color: var(--text-primary);
     outline: none;
@@ -641,7 +755,6 @@ html, body {
     background: var(--bg-btn);
     cursor: pointer;
     font-size: 13px;
-    font-family: inherit;
     color: var(--text-secondary);
 }
 

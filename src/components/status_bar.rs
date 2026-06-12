@@ -10,6 +10,9 @@ pub fn StatusBar(
     is_saved: Signal<bool>,
     auto_save_enabled: Signal<bool>,
     writing_mode: Memo<String>,
+    font_size: u32,
+    on_increase_font: EventHandler<()>,
+    on_decrease_font: EventHandler<()>,
 ) -> Element {
     let chap = selected_chapter.read().clone();
     let filename = if chap.is_empty() {
@@ -31,6 +34,8 @@ pub fn StatusBar(
                     class: if saved { "status-item saved" } else { "status-item unsaved" },
                     if saved { "保存済" } else { "未保存" }
                 }
+                span { class: "status-sep", "|" }
+                span { class: "status-item", "{font_size}px" }
             }
             div { class: "status-right",
                 span { class: "status-item", "{char_count} 文字" }

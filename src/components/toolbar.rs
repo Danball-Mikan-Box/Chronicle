@@ -13,6 +13,17 @@ pub fn Toolbar(
     on_export: EventHandler<()>,
     on_toggle_dark: EventHandler<()>,
     is_dark: bool,
+    show_sidebar: bool,
+    show_editor: bool,
+    show_preview: bool,
+    focus_mode: bool,
+    font_size: u32,
+    on_toggle_sidebar: EventHandler<()>,
+    on_toggle_editor: EventHandler<()>,
+    on_toggle_preview: EventHandler<()>,
+    on_toggle_focus_mode: EventHandler<()>,
+    on_increase_font: EventHandler<()>,
+    on_decrease_font: EventHandler<()>,
 ) -> Element {
     let text = content.read().clone();
     let char_count = text.chars().filter(|c| !c.is_whitespace()).count();
@@ -78,6 +89,47 @@ pub fn Toolbar(
                     class: if is_dark { "toolbar-btn active" } else { "toolbar-btn" },
                     onclick: move |_| on_toggle_dark.call(()),
                     if is_dark { "\u{2601}" } else { "\u{2600}" }
+                }
+                span { class: "separator" }
+                button {
+                    class: if show_sidebar { "toolbar-btn active" } else { "toolbar-btn" },
+                    onclick: move |_| on_toggle_sidebar.call(()),
+                    title: "サイドバー",
+                    "\u{2630}"
+                }
+                button {
+                    class: if show_editor { "toolbar-btn active" } else { "toolbar-btn" },
+                    onclick: move |_| on_toggle_editor.call(()),
+                    title: "エディタ",
+                    "E"
+                }
+                button {
+                    class: if show_preview { "toolbar-btn active" } else { "toolbar-btn" },
+                    onclick: move |_| on_toggle_preview.call(()),
+                    title: "プレビュー",
+                    "\u{1F441}"
+                }
+                button {
+                    class: if focus_mode { "toolbar-btn active" } else { "toolbar-btn" },
+                    onclick: move |_| on_toggle_focus_mode.call(()),
+                    title: "集中モード",
+                    "\u{26F6}"
+                }
+                span { class: "separator" }
+                div { class: "font-size-controls",
+                    button {
+                        class: "toolbar-btn",
+                        onclick: move |_| on_decrease_font.call(()),
+                        title: "文字を小さく",
+                        "A-"
+                    }
+                    span { class: "font-size-value", "{font_size}" }
+                    button {
+                        class: "toolbar-btn",
+                        onclick: move |_| on_increase_font.call(()),
+                        title: "文字を大きく",
+                        "A+"
+                    }
                 }
             }
             div { class: "toolbar-right",

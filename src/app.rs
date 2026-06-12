@@ -58,7 +58,6 @@ fn do_export(project: &Signal<Option<Project>>, content: &Signal<String>, select
                 let _ = std::fs::write(&path, &output);
             }
         } else {
-            // export all chapters
             let txt = p.chapters.iter().filter_map(|ch| {
                 let c = fs::chapter::load_chapter(p, &ch.file_name).ok()?;
                 Some(format!("# {}\n\n{}\n\n", ch.title, c))
@@ -114,9 +113,75 @@ pub fn App() -> Element {
     let auto_save_enabled = use_signal(|| true);
     let desktop = use_window();
 
+    let mut chapter_version = use_signal(|| 0u32);
+    let mut show_sidebar = use_signal(|| true);
+    let mut show_editor = use_signal(|| true);
+    let mut show_preview = use_signal(|| true);
+    let mut focus_mode = use_signal(|| false);
+    let mut font_size = use_signal(|| 16u32);
+
     let writing_mode_str = use_memo(move || match *writing_mode.read() {
         WritingMode::Vertical => "vertical".to_string(),
         WritingMode::Horizontal => "horizontal".to_string(),
+    });
+
+    let main_class = use_memo(move || {
+        let mut c = "main-content".to_string();
+        if *focus_mode.read() { c.push_str(" focus-mode"); }
+        c
+    });
+
+    let sidebar_class = use_memo(move || {
+        if *show_sidebar.read() { "sidebar" } else { "sidebar hidden" }
+    });
+
+    let editor_pane_class = use_memo(move || {
+        if *show_editor.read() { "editor-pane" } else { "editor-pane hidden" }
+    });
+
+    let preview_class = use_memo(move || {
+        if *show_preview.read() { "preview-pane" } else { "preview-pane hidden" }
+    });
+
+    // Fix always-on-top
+    let desktop_top = desktop.clone();
+    use_effect(move || {
+        desktop_top.set_always_on_top(false);
+    });
+
+    // Setup: resizable panels
+    let desktop_ui = desktop.clone();
+    use_effect(move || {
+        let js = r#"
+            (function() {
+                if (window.__chronicle_initialized) return;
+                window.__chronicle_initialized = true;
+
+                var dragData = null;
+                function initResize(handleId, targetSel, sign, min, max) {
+                    var h = document.getElementById(handleId);
+                    if (!h) return;
+                    h.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        var t = document.querySelector(targetSel);
+                        if (!t) return;
+                        dragData = { startX: e.clientX, startSize: t.offsetWidth, target: t, sign: sign, min: min, max: max };
+                    });
+                }
+                document.addEventListener('mousemove', function(e) {
+                    if (!dragData) return;
+                    var d = e.clientX - dragData.startX;
+                    var ns = dragData.startSize + dragData.sign * d;
+                    ns = Math.max(dragData.min, Math.min(dragData.max, ns));
+                    dragData.target.style.width = ns + 'px';
+                    dragData.target.style.flex = '0 0 auto';
+                });
+                document.addEventListener('mouseup', function() { dragData = null; });
+                initResize('resize-sidebar', '.sidebar', 1, 150, 500);
+                initResize('resize-preview', '.preview-pane', -1, 200, 800);
+            })();
+        "#;
+        let _ = desktop_ui.webview.evaluate_script(js);
     });
 
     let on_new_project = move |_| {
@@ -211,6 +276,34 @@ pub fn App() -> Element {
         let _ = desktop.webview.evaluate_script(js);
     };
 
+    let on_toggle_sidebar = move |_| {
+        let v = !*show_sidebar.read();
+        show_sidebar.set(v);
+    };
+    let on_toggle_editor = move |_| {
+        let v = !*show_editor.read();
+        show_editor.set(v);
+    };
+    let on_toggle_preview = move |_| {
+        let v = !*show_preview.read();
+        show_preview.set(v);
+    };
+
+    let on_toggle_focus_mode = move |_| {
+        let v = !*focus_mode.read();
+        focus_mode.set(v);
+    };
+
+    let on_increase_font = move |_| {
+        let mut f = font_size.write();
+        if *f < 32 { *f += 1; }
+    };
+
+    let on_decrease_font = move |_| {
+        let mut f = font_size.write();
+        if *f > 8 { *f -= 1; }
+    };
+
     let on_add_chapter = move |title: String| {
         let mut proj = project.write();
         if let Some(ref mut p) = *proj {
@@ -221,6 +314,7 @@ pub fn App() -> Element {
             selected_chapter.set(fname);
             content.set(String::new());
             is_saved.set(true);
+            *chapter_version.write() += 1;
         }
     };
 
@@ -234,6 +328,7 @@ pub fn App() -> Element {
             if *selected_chapter.read() == file_name {
                 selected_chapter.set(String::new());
                 content.set(String::new());
+                *chapter_version.write() += 1;
             }
         }
     };
@@ -260,7 +355,7 @@ pub fn App() -> Element {
         }
     };
 
-    // Load chapter content when switching chapters
+    let mut loading_chapter_version = chapter_version.clone();
     use_effect(use_reactive(&(project, selected_chapter), move |(proj, ch)| {
         if let Some(ref p) = *proj.read() {
             let fname = ch.read().clone();
@@ -269,6 +364,7 @@ pub fn App() -> Element {
                     Ok(text) => {
                         content.set(text);
                         is_saved.set(true);
+                        *loading_chapter_version.write() += 1;
                     }
                     Err(_) => {}
                 }
@@ -276,7 +372,6 @@ pub fn App() -> Element {
         }
     }));
 
-    // Auto-save with debounce
     let auto_save = auto_save_enabled.clone();
     use_effect(use_reactive(&content, move |_| {
         let mut is_saved = is_saved.clone();
@@ -297,7 +392,6 @@ pub fn App() -> Element {
         }
     }));
 
-    // Auto-dismiss notification
     let notif_clone = save_notification.clone();
     use_effect(move || {
         if save_notification.read().is_some() {
@@ -322,24 +416,45 @@ pub fn App() -> Element {
                 on_export: on_export,
                 on_toggle_dark: on_toggle_dark,
                 is_dark: *is_dark.read(),
+                show_sidebar: *show_sidebar.read(),
+                show_editor: *show_editor.read(),
+                show_preview: *show_preview.read(),
+                focus_mode: *focus_mode.read(),
+                font_size: *font_size.read(),
+                on_toggle_sidebar: on_toggle_sidebar,
+                on_toggle_editor: on_toggle_editor,
+                on_toggle_preview: on_toggle_preview,
+                on_toggle_focus_mode: on_toggle_focus_mode,
+                on_increase_font: on_increase_font,
+                on_decrease_font: on_decrease_font,
             }
-            div { class: "main-content",
-                Sidebar {
-                    project: project,
-                    selected_chapter: selected_chapter,
-                    on_add_chapter: on_add_chapter,
-                    on_delete_chapter: on_delete_chapter,
-                    on_rename_chapter: on_rename_chapter,
-                    recent_projects: recent_projects,
-                    on_open_recent: on_open_recent,
+            div { class: main_class,
+                aside { class: sidebar_class,
+                    Sidebar {
+                        project: project,
+                        selected_chapter: selected_chapter,
+                        on_add_chapter: on_add_chapter,
+                        on_delete_chapter: on_delete_chapter,
+                        on_rename_chapter: on_rename_chapter,
+                        recent_projects: recent_projects,
+                        on_open_recent: on_open_recent,
+                    }
                 }
-                div { class: "editor-pane",
+                if *show_sidebar.read() {
+                    div { id: "resize-sidebar", class: "resize-handle" }
+                }
+                div { class: editor_pane_class,
                     Editor {
                         content: content,
                         on_save: on_save,
+                        chapter_version: *chapter_version.read(),
+                        font_size: *font_size.read(),
                     }
                 }
-                div { class: "preview-pane",
+                if *show_preview.read() {
+                    div { id: "resize-preview", class: "resize-handle" }
+                }
+                div { class: preview_class,
                     Preview {
                         content: content,
                         writing_mode: writing_mode_str,
@@ -353,6 +468,9 @@ pub fn App() -> Element {
                 is_saved: is_saved,
                 auto_save_enabled: auto_save_enabled,
                 writing_mode: writing_mode_str,
+                font_size: *font_size.read(),
+                on_increase_font: on_increase_font,
+                on_decrease_font: on_decrease_font,
             }
             ProjectDialog {
                 visible: dialog_visible,
