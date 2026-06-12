@@ -1,12 +1,13 @@
 use dioxus::prelude::*;
+use std::collections::HashMap;
 
-use crate::model::project::Project;
+use crate::model::{DocRef, Project};
 
 #[component]
 pub fn StatusBar(
     project: Signal<Option<Project>>,
-    selected_chapter: Signal<String>,
-    content: Signal<String>,
+    active_tab: Signal<Option<DocRef>>,
+    tab_content: Signal<HashMap<DocRef, String>>,
     is_saved: Signal<bool>,
     auto_save_enabled: Signal<bool>,
     writing_mode: Memo<String>,
@@ -14,14 +15,15 @@ pub fn StatusBar(
     on_increase_font: EventHandler<()>,
     on_decrease_font: EventHandler<()>,
 ) -> Element {
-    let chap = selected_chapter.read().clone();
-    let filename = if chap.is_empty() {
-        "ファイル未選択".to_string()
-    } else {
-        chap.clone()
+    let filename = match active_tab.read().as_ref() {
+        Some(doc) => doc.short_label(),
+        None => "ファイル未選択".to_string(),
     };
 
-    let char_count = content.read().chars().filter(|c| !c.is_whitespace()).count();
+    let text = active_tab.read().as_ref()
+        .and_then(|doc| tab_content.read().get(doc).cloned())
+        .unwrap_or_default();
+    let char_count = text.chars().filter(|c| !c.is_whitespace()).count();
     let saved = *is_saved.read();
     let auto = *auto_save_enabled.read();
 

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6,6 +7,8 @@ pub struct Project {
     pub name: String,
     pub root_dir: PathBuf,
     pub chapters: Vec<ChapterEntry>,
+    #[serde(default)]
+    pub materials: Vec<MaterialEntry>,
     pub settings: ProjectSettings,
 }
 
@@ -15,45 +18,147 @@ impl Project {
             name: name.to_string(),
             root_dir,
             chapters: Vec::new(),
+            materials: Vec::new(),
             settings: ProjectSettings::default(),
         }
     }
 
+    fn sanitize_name(s: &str, max: usize) -> String {
+        s.chars()
+            .take(max)
+            .collect::<String>()
+            .replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "")
+            .trim()
+            .to_string()
+    }
+
+    // ── Chapters ──
+
     pub fn add_chapter(&mut self, title: &str) -> ChapterEntry {
         let order = self.chapters.len();
-        let safe_name: String = title.chars().take(20).collect::<String>()
-            .replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "");
-        let file_name = format!("{:02}-{}.md", order + 1, safe_name.replace(' ', "-"));
+        let safe = Self::sanitize_name(title, 20).replace(' ', "-");
+        let dir_name = format!("{:02}-{}", order + 1, if safe.is_empty() { "無題" } else { &safe });
         let entry = ChapterEntry {
             title: title.to_string(),
-            file_name,
+            dir_name,
             order,
-            children: Vec::new(),
+            tales: Vec::new(),
         };
         self.chapters.push(entry.clone());
         entry
     }
 
-    pub fn rename_chapter(&mut self, old_file_name: &str, new_title: &str) -> Option<String> {
-        let entry = self.chapters.iter_mut().find(|c| c.file_name == old_file_name)?;
-        let safe_name: String = new_title.chars().take(20).collect::<String>()
-            .replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "");
-        let new_file_name = format!("{:02}-{}.md", entry.order + 1, safe_name.replace(' ', "-"));
+    pub fn rename_chapter(&mut self, old_dir: &str, new_title: &str) -> Option<String> {
+        let entry = self.chapters.iter_mut().find(|c| c.dir_name == old_dir)?;
+        let safe = Self::sanitize_name(new_title, 20).replace(' ', "-");
+        let new_dir = format!("{:02}-{}", entry.order + 1, if safe.is_empty() { "無題" } else { &safe });
         entry.title = new_title.to_string();
-        let old = entry.file_name.clone();
-        entry.file_name = new_file_name.clone();
+        let old = entry.dir_name.clone();
+        entry.dir_name = new_dir;
         Some(old)
     }
 
-    pub fn remove_chapter(&mut self, file_name: &str) {
-        self.chapters.retain(|c| c.file_name != file_name);
+    pub fn remove_chapter(&mut self, dir_name: &str) {
+        self.chapters.retain(|c| c.dir_name != dir_name);
         for (i, c) in self.chapters.iter_mut().enumerate() {
             c.order = i;
         }
     }
 
-    pub fn chapter_path(&self, file_name: &str) -> PathBuf {
-        self.root_dir.join("chapters").join(file_name)
+    // ── Tales ──
+
+    pub fn add_tale(&mut self, chapter_dir: &str, title: &str) -> Option<TaleEntry> {
+        let ch = self.chapters.iter_mut().find(|c| c.dir_name == chapter_dir)?;
+        let order = ch.tales.len();
+        let safe = Self::sanitize_name(title, 30).replace(' ', "-");
+        let file_name = format!(
+            "{:02}-{}.md",
+            order + 1,
+            if safe.is_empty() { "無題" } else { &safe }
+        );
+        let entry = TaleEntry {
+            title: title.to_string(),
+            file_name,
+            order,
+        };
+        ch.tales.push(entry.clone());
+        Some(entry)
+    }
+
+    pub fn rename_tale(
+        &mut self,
+        chapter_dir: &str,
+        old_file: &str,
+        new_title: &str,
+    ) -> Option<(String, String)> {
+        let ch = self.chapters.iter_mut().find(|c| c.dir_name == chapter_dir)?;
+        let entry = ch.tales.iter_mut().find(|t| t.file_name == old_file)?;
+        let safe = Self::sanitize_name(new_title, 30).replace(' ', "-");
+        let new_file = format!(
+            "{:02}-{}.md",
+            entry.order + 1,
+            if safe.is_empty() { "無題" } else { &safe }
+        );
+        entry.title = new_title.to_string();
+        let old = entry.file_name.clone();
+        entry.file_name = new_file.clone();
+        Some((old, new_file))
+    }
+
+    pub fn remove_tale(&mut self, chapter_dir: &str, file_name: &str) {
+        if let Some(ch) = self.chapters.iter_mut().find(|c| c.dir_name == chapter_dir) {
+            ch.tales.retain(|t| t.file_name != file_name);
+            for (i, t) in ch.tales.iter_mut().enumerate() {
+                t.order = i;
+            }
+        }
+    }
+
+    // ── Materials ──
+
+    pub fn add_material(&mut self, title: &str, category: MaterialCategory) -> MaterialEntry {
+        let order = self.materials.len();
+        let safe = Self::sanitize_name(title, 30).replace(' ', "-");
+        let file_name = format!("{}.md", if safe.is_empty() { "無題" } else { &safe });
+        let entry = MaterialEntry {
+            title: title.to_string(),
+            file_name,
+            category,
+            order,
+        };
+        self.materials.push(entry.clone());
+        entry
+    }
+
+    pub fn rename_material(&mut self, old_file: &str, new_title: &str) -> Option<String> {
+        let entry = self.materials.iter_mut().find(|m| m.file_name == old_file)?;
+        let safe = Self::sanitize_name(new_title, 30).replace(' ', "-");
+        let new_file = format!("{}.md", if safe.is_empty() { "無題" } else { &safe });
+        entry.title = new_title.to_string();
+        let old = entry.file_name.clone();
+        entry.file_name = new_file;
+        Some(old)
+    }
+
+    pub fn remove_material(&mut self, file_name: &str) {
+        self.materials.retain(|m| m.file_name != file_name);
+        for (i, m) in self.materials.iter_mut().enumerate() {
+            m.order = i;
+        }
+    }
+
+    // ── Paths ──
+
+    pub fn chapter_dir(&self, dir_name: &str) -> PathBuf {
+        self.root_dir.join("chapters").join(dir_name)
+    }
+
+    pub fn tale_path(&self, chapter_dir: &str, file_name: &str) -> PathBuf {
+        self.root_dir.join("chapters").join(chapter_dir).join(file_name)
+    }
+
+    pub fn material_path(&self, file_name: &str) -> PathBuf {
+        self.root_dir.join("materials").join(file_name)
     }
 
     pub fn project_file_path(&self) -> PathBuf {
@@ -61,26 +166,142 @@ impl Project {
     }
 }
 
+// ── Entry types ──
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChapterEntry {
     pub title: String,
+    pub dir_name: String,
+    pub order: usize,
+    #[serde(default)]
+    pub tales: Vec<TaleEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaleEntry {
+    pub title: String,
     pub file_name: String,
     pub order: usize,
-    pub children: Vec<ChapterEntry>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialEntry {
+    pub title: String,
+    pub file_name: String,
+    pub category: MaterialCategory,
+    pub order: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum MaterialCategory {
+    Character,
+    World,
+    Glossary,
+    Timeline,
+    Other(String),
+}
+
+impl MaterialCategory {
+    pub fn label(&self) -> &str {
+        match self {
+            MaterialCategory::Character => "キャラクター",
+            MaterialCategory::World => "世界観",
+            MaterialCategory::Glossary => "用語集",
+            MaterialCategory::Timeline => "年表",
+            MaterialCategory::Other(s) => s,
+        }
+    }
+}
+
+// ── Settings ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSettings {
     pub writing_mode: WritingMode,
+    #[serde(default)]
     pub author: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default)]
     pub daily_goal: usize,
+    #[serde(default)]
+    pub preview_position: PanelPosition,
+    #[serde(default)]
+    pub sidebar_position: SidebarPosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WritingMode {
     Vertical,
     Horizontal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum PanelPosition {
+    Right,
+    Bottom,
+}
+
+impl Default for PanelPosition {
+    fn default() -> Self { Self::Right }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum SidebarPosition {
+    Left,
+    Right,
+}
+
+impl Default for SidebarPosition {
+    fn default() -> Self { Self::Left }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ActivityTab {
+    Explorer,
+    Materials,
+}
+
+// ── Document reference ──
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DocRef {
+    Tale {
+        chapter_dir: String,
+        tale_file: String,
+        chapter_title: String,
+        tale_title: String,
+    },
+    Material {
+        file_name: String,
+        title: String,
+    },
+}
+
+impl DocRef {
+    pub fn tab_label(&self) -> String {
+        match self {
+            DocRef::Tale { chapter_title, tale_title, .. } => {
+                format!("{} / {}", chapter_title, tale_title)
+            }
+            DocRef::Material { title, .. } => title.clone(),
+        }
+    }
+
+    pub fn short_label(&self) -> String {
+        match self {
+            DocRef::Tale { tale_title, .. } => tale_title.clone(),
+            DocRef::Material { title, .. } => title.clone(),
+        }
+    }
+}
+
+/// Open-tab state, not serialised with the project.
+#[derive(Debug, Clone)]
+pub struct TabState {
+    pub open_tabs: Vec<DocRef>,
+    pub active_tab: DocRef,
+    pub tab_content: HashMap<DocRef, String>,
 }
 
 impl Default for ProjectSettings {
@@ -90,6 +311,8 @@ impl Default for ProjectSettings {
             author: String::new(),
             description: String::new(),
             daily_goal: 1000,
+            preview_position: PanelPosition::Right,
+            sidebar_position: SidebarPosition::Left,
         }
     }
 }

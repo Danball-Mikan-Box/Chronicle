@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_desktop::use_window;
+use std::collections::HashMap;
 
 use crate::components::dialog::ProjectDialog;
 use crate::components::dialog::RenameDialog;
@@ -7,68 +8,30 @@ use crate::components::editor::Editor;
 use crate::components::preview::Preview;
 use crate::components::sidebar::Sidebar;
 use crate::components::status_bar::StatusBar;
+use crate::components::tab_bar::TabBar;
 use crate::components::toolbar::Toolbar;
 use crate::fs;
-use crate::model::project::{Project, WritingMode};
+use crate::model::{ActivityTab, DocRef, Project, WritingMode};
 use crate::styles;
 
-fn do_save(
-    project: &Signal<Option<Project>>,
-    content: &Signal<String>,
-    selected_chapter: &Signal<String>,
-    is_saved: &mut Signal<bool>,
-    save_notification: &mut Signal<Option<String>>,
-) {
-    if let Some(ref p) = project.read().clone() {
-        let chapter = selected_chapter.read().clone();
-        if !chapter.is_empty() {
-            let content_val = content.read().clone();
-            match fs::chapter::save_chapter(p, &chapter, &content_val) {
-                Ok(_) => {
-                    *save_notification.write() = Some("保存しました".to_string());
-                    is_saved.set(true);
-                }
-                Err(e) => {
-                    *save_notification.write() = Some(format!("保存エラー: {}", e));
-                }
-            }
+fn load_doc_content(p: &Project, doc: &DocRef) -> Result<String, String> {
+    match doc {
+        DocRef::Tale { chapter_dir, tale_file, .. } => {
+            fs::chapter::load_tale(p, chapter_dir, tale_file).map_err(|e| e.to_string())
+        }
+        DocRef::Material { file_name, .. } => {
+            fs::material::load_material(p, file_name).map_err(|e| e.to_string())
         }
     }
 }
 
-fn do_export(project: &Signal<Option<Project>>, content: &Signal<String>, selected_chapter: &Signal<String>) {
-    let proj = project.read().clone();
-    let chapter = selected_chapter.read().clone();
-    if let Some(ref p) = proj {
-        let content_val = content.read().clone();
-        if !chapter.is_empty() {
-            let dir = rfd::FileDialog::new()
-                .set_title("保存先を選択")
-                .set_file_name(&chapter.replace(".md", ".txt"))
-                .save_file();
-            if let Some(path) = dir {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
-                let output = if ext == "html" {
-                    let html = crate::markdown::renderer::render_to_html(&content_val);
-                    format!("<!DOCTYPE html><html lang=ja><meta charset=utf-8><title>{}</title><body>{}</body></html>",
-                        chapter.replace(".md", ""), html)
-                } else {
-                    content_val.clone()
-                };
-                let _ = std::fs::write(&path, &output);
-            }
-        } else {
-            let txt = p.chapters.iter().filter_map(|ch| {
-                let c = fs::chapter::load_chapter(p, &ch.file_name).ok()?;
-                Some(format!("# {}\n\n{}\n\n", ch.title, c))
-            }).collect::<Vec<_>>().join("---\n\n");
-            let dir = rfd::FileDialog::new()
-                .set_title("保存先を選択")
-                .set_file_name("全章.txt")
-                .save_file();
-            if let Some(path) = dir {
-                let _ = std::fs::write(&path, &txt);
-            }
+fn save_doc_content(p: &Project, doc: &DocRef, content: &str) -> Result<(), String> {
+    match doc {
+        DocRef::Tale { chapter_dir, tale_file, .. } => {
+            fs::chapter::save_tale(p, chapter_dir, tale_file, content).map_err(|e| e.to_string())
+        }
+        DocRef::Material { file_name, .. } => {
+            fs::material::save_material(p, file_name, content).map_err(|e| e.to_string())
         }
     }
 }
@@ -99,9 +62,13 @@ fn push_recent(list: &mut Vec<String>, dir: String) {
 
 #[component]
 pub fn App() -> Element {
-    let mut content = use_signal(|| String::new());
-    let mut selected_chapter = use_signal(|| String::new());
     let mut project = use_signal(|| Option::<Project>::None);
+    let mut open_tabs: Signal<Vec<DocRef>> = use_signal(Vec::new);
+    let mut active_tab: Signal<Option<DocRef>> = use_signal(|| None);
+    let mut tab_content: Signal<HashMap<DocRef, String>> = use_signal(HashMap::new);
+
+    let content = use_signal(|| String::new());
+
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
     let mut rename_dialog_visible = use_signal(|| false);
@@ -119,6 +86,7 @@ pub fn App() -> Element {
     let mut show_preview = use_signal(|| true);
     let mut focus_mode = use_signal(|| false);
     let mut font_size = use_signal(|| 16u32);
+    let mut activity_tab = use_signal(|| ActivityTab::Explorer);
 
     let writing_mode_str = use_memo(move || match *writing_mode.read() {
         WritingMode::Vertical => "vertical".to_string(),
@@ -127,66 +95,383 @@ pub fn App() -> Element {
 
     let main_class = use_memo(move || {
         let mut c = "main-content".to_string();
-        if *focus_mode.read() { c.push_str(" focus-mode"); }
+        if *focus_mode.read() {
+            c.push_str(" focus-mode");
+        }
+        match project.read().as_ref().map(|p| p.settings.sidebar_position) {
+            Some(crate::model::SidebarPosition::Right) => c.push_str(" sidebar-right"),
+            _ => {}
+        }
+        match project.read().as_ref().map(|p| p.settings.preview_position) {
+            Some(crate::model::PanelPosition::Bottom) => c.push_str(" preview-bottom"),
+            _ => {}
+        }
         c
     });
 
-    let sidebar_class = use_memo(move || {
-        if *show_sidebar.read() { "sidebar" } else { "sidebar hidden" }
-    });
-
-    let editor_pane_class = use_memo(move || {
-        if *show_editor.read() { "editor-pane" } else { "editor-pane hidden" }
-    });
-
-    let preview_class = use_memo(move || {
-        if *show_preview.read() { "preview-pane" } else { "preview-pane hidden" }
-    });
-
-    // Fix always-on-top
     let desktop_top = desktop.clone();
     use_effect(move || {
         desktop_top.set_always_on_top(false);
     });
 
-    // Setup: resizable panels
+    // Resize JS
     let desktop_ui = desktop.clone();
     use_effect(move || {
         let js = r#"
-            (function() {
-                if (window.__chronicle_initialized) return;
-                window.__chronicle_initialized = true;
+(function() {
+    if (window.__chronicle_init) return;
+    window.__chronicle_init = true;
 
-                var dragData = null;
-                function initResize(handleId, targetSel, sign, min, max) {
-                    var h = document.getElementById(handleId);
-                    if (!h) return;
-                    h.addEventListener('mousedown', function(e) {
-                        e.preventDefault();
-                        var t = document.querySelector(targetSel);
-                        if (!t) return;
-                        dragData = { startX: e.clientX, startSize: t.offsetWidth, target: t, sign: sign, min: min, max: max };
-                    });
+    var S = {
+        sidebarPct: 0.20,
+        previewPct: 0.35,
+        sidebarMin: 150, sidebarMax: 500,
+        previewMin: 200, previewMax: 800,
+        editorMin: 200,
+    };
+    var DRAG = null;
+
+    function visible(el) {
+        return el && el.offsetParent !== null;
+    }
+
+    function apply() {
+        var c = document.querySelector('.main-content');
+        if (!c) return;
+        var pb = c.classList.contains('preview-bottom');
+        var sb = document.querySelector('.sidebar');
+        var ed = document.querySelector('.editor-pane');
+        var pv = document.querySelector('.preview-pane');
+
+        function hw() { var h = document.querySelector('.resize-handle'); return h ? h.offsetWidth : 5; }
+        function hh() { var h = document.querySelector('.resize-handle'); return h ? h.offsetHeight : 5; }
+
+        var vsb = visible(sb);
+        var ved = visible(ed);
+        var vpv = visible(pv);
+
+        if (pb) {
+            // ── preview-bottom mode ──
+            // Horizontal: sidebar | handle | editor  (preview is below)
+            // Vertical:   top area | handle | preview
+            var ch = c.offsetHeight;
+            var cw = c.offsetWidth;
+            var hhVal = hh();
+            // Vertical split
+            var vpvH = Math.round(ch * S.previewPct);
+            vpvH = Math.max(S.previewMin, Math.min(S.previewMax, vpvH));
+            if (vpv && ved) {
+                // Preview height
+                pv.style.width = 'auto';
+                pv.style.height = vpvH + 'px';
+                // Remaining vertical space for sidebar + editor
+                var topH = ch - hhVal - vpvH;
+                var sbH = Math.round(topH * 0.3); // sidebar takes 30% of top area
+                sbH = Math.max(S.sidebarMin, Math.min(S.sidebarMax, sbH));
+                if (sb && ved) {
+                    sb.style.width = sbH + 'px';
+                    ed.style.width = (cw - hw() - sbH) + 'px';
+                } else if (sb) {
+                    sb.style.width = cw + 'px';
+                } else if (ved) {
+                    ed.style.width = cw + 'px';
                 }
-                document.addEventListener('mousemove', function(e) {
-                    if (!dragData) return;
-                    var d = e.clientX - dragData.startX;
-                    var ns = dragData.startSize + dragData.sign * d;
-                    ns = Math.max(dragData.min, Math.min(dragData.max, ns));
-                    dragData.target.style.width = ns + 'px';
-                    dragData.target.style.flex = '0 0 auto';
-                });
-                document.addEventListener('mouseup', function() { dragData = null; });
-                initResize('resize-sidebar', '.sidebar', 1, 150, 500);
-                initResize('resize-preview', '.preview-pane', -1, 200, 800);
-            })();
-        "#;
+            } else if (vpv) {
+                pv.style.width = 'auto';
+                pv.style.height = vpvH + 'px';
+                if (sb) sb.style.width = cw + 'px';
+                if (ved) ed.style.width = cw + 'px';
+            } else {
+                // No preview
+                if (sb && ved) {
+                    sb.style.width = Math.round(cw * 0.3) + 'px';
+                    ed.style.width = (cw - hw() - sb.offsetWidth) + 'px';
+                } else {
+                    if (sb) sb.style.width = cw + 'px';
+                    if (ved) ed.style.width = cw + 'px';
+                }
+            }
+        } else {
+            // ── horizontal mode ──
+            var cw = c.offsetWidth;
+            var hwVal = hw();
+            var nHandles = 0;
+            if (vsb && ved) nHandles++;
+            if (ved && vpv) nHandles++;
+            var aw = cw - nHandles * hwVal; // space for panels
+            if (aw <= 0) return;
+
+            if (nHandles === 2) {
+                // All three visible
+                var sw = Math.round(aw * S.sidebarPct);
+                sw = Math.max(S.sidebarMin, Math.min(S.sidebarMax, sw));
+                var pw = Math.round(aw * S.previewPct);
+                pw = Math.max(S.previewMin, Math.min(S.previewMax, pw));
+                var ew = aw - sw - pw;
+                if (ew < S.editorMin) {
+                    // Editor too small — steal from both
+                    var deficit = S.editorMin - ew;
+                    var spSw = sw - Math.round(deficit * S.sidebarPct / (S.sidebarPct + S.previewPct));
+                    var spPw = pw - Math.round(deficit * S.previewPct / (S.sidebarPct + S.previewPct));
+                    sw = Math.max(S.sidebarMin, spSw);
+                    pw = Math.max(S.previewMin, spPw);
+                    ew = aw - sw - pw;
+                }
+                sb.style.width = sw + 'px';
+                ed.style.width = ew + 'px';
+                pv.style.width = pw + 'px';
+                // Update stored pcts
+                S.sidebarPct = sw / aw;
+                S.previewPct = pw / aw;
+            } else if (nHandles === 1 && vsb && ved) {
+                // Sidebar + editor only
+                sb.style.width = Math.round(aw * S.sidebarPct / (S.sidebarPct + (1 - S.sidebarPct - S.previewPct))) + 'px';
+                ed.style.width = (aw - sb.offsetWidth) + 'px';
+            } else if (nHandles === 1 && ved && vpv) {
+                // Editor + preview only
+                pv.style.width = Math.round(aw * S.previewPct / (S.previewPct + (1 - S.sidebarPct - S.previewPct))) + 'px';
+                ed.style.width = (aw - pv.offsetWidth) + 'px';
+            } else if (vsb) {
+                sb.style.width = cw + 'px';
+            } else if (ved) {
+                ed.style.width = cw + 'px';
+            } else if (vpv) {
+                pv.style.width = cw + 'px';
+            }
+        }
+    }
+    window.__chronicle_apply = apply;
+
+    // ── Drag resize ──
+    document.addEventListener('mousedown', function(e) {
+        var h = e.target.closest('.resize-handle');
+        if (!h) return;
+        e.preventDefault();
+        var c = document.querySelector('.main-content');
+        if (!c) return;
+        var pb = c.classList.contains('preview-bottom');
+        var isVertical = pb && h.id === 'resize-preview';
+        DRAG = {
+            id: h.id,
+            startPos: isVertical ? e.clientY : e.clientX,
+            sidebarPct: S.sidebarPct,
+            previewPct: S.previewPct,
+            isVertical: isVertical,
+            cSize: isVertical ? c.offsetHeight : c.offsetWidth,
+        };
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!DRAG) return;
+        var c = document.querySelector('.main-content');
+        if (!c) return;
+        var pb = c.classList.contains('preview-bottom');
+        var pos = DRAG.isVertical ? e.clientY : e.clientX;
+        var delta = pos - DRAG.startPos;
+        var cSize = DRAG.isVertical ? c.offsetHeight : c.offsetWidth;
+        var hSize = DRAG.isVertical
+            ? (document.querySelector('.resize-handle') ? document.querySelector('.resize-handle').offsetHeight : 5)
+            : (document.querySelector('.resize-handle') ? document.querySelector('.resize-handle').offsetWidth : 5);
+        var baseSize = DRAG.cSize - (DRAG.isVertical ? hSize : 2 * hSize);
+        if (baseSize <= 0) return;
+
+        if (DRAG.id === 'resize-sidebar') {
+            var np = DRAG.sidebarPct + delta / baseSize;
+            np = Math.max(S.sidebarMin / baseSize, Math.min(Math.min(S.sidebarMax, cSize - S.editorMin - S.previewMin) / baseSize, np));
+            S.sidebarPct = np;
+        } else if (DRAG.id === 'resize-preview') {
+            // Dragging right = preview smaller, so negative delta
+            var sign = DRAG.isVertical ? 1 : -1;
+            var np = DRAG.previewPct + sign * delta / baseSize;
+            np = Math.max(S.previewMin / baseSize, Math.min(Math.min(S.previewMax, cSize - S.editorMin - S.sidebarMin) / baseSize, np));
+            S.previewPct = np;
+        }
+        apply();
+    });
+
+    document.addEventListener('mouseup', function() { DRAG = null; });
+    document.addEventListener('mouseleave', function() { DRAG = null; });
+
+    window.addEventListener('resize', function() {
+        if (window.__resizeTimer) clearTimeout(window.__resizeTimer);
+        window.__resizeTimer = setTimeout(apply, 30);
+    });
+
+    apply();
+})();
+"#;
         let _ = desktop_ui.webview.evaluate_script(js);
     });
 
-    let on_new_project = move |_| {
-        dialog_visible.set(true);
+    // ── Helpers ──
+
+    let mut switch_to_doc = {
+        let mut active_tab = active_tab.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut chapter_version = chapter_version.clone();
+        let project = project.clone();
+        let mut content_sig = content.clone();
+        let mut is_saved = is_saved.clone();
+        move |doc: DocRef| {
+            let tabs = open_tabs.read().clone();
+            if !tabs.contains(&doc) {
+                if let Some(ref p) = project.read().clone() {
+                    match load_doc_content(p, &doc) {
+                        Ok(text) => {
+                            tab_content.write().insert(doc.clone(), text);
+                        }
+                        Err(e) => {
+                            tab_content.write().insert(doc.clone(), format!("読み込みエラー: {}", e));
+                        }
+                    }
+                } else {
+                    tab_content.write().insert(doc.clone(), String::new());
+                }
+                open_tabs.write().push(doc.clone());
+            }
+
+            if let Some(text) = tab_content.read().get(&doc).cloned() {
+                content_sig.set(text);
+            }
+            active_tab.set(Some(doc));
+            is_saved.set(true);
+            chapter_version += 1;
+        }
     };
+
+    let on_open_doc = {
+        let mut switch_to_doc = switch_to_doc.clone();
+        move |doc: DocRef| {
+            switch_to_doc(doc);
+        }
+    };
+
+    let on_close_tab = {
+        let mut active_tab = active_tab.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut content_sig = content.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut is_saved = is_saved.clone();
+        move |doc: DocRef| {
+            tab_content.write().remove(&doc);
+            let mut tabs = open_tabs.write();
+            let idx = tabs.iter().position(|t| t == &doc);
+            tabs.retain(|t| t != &doc);
+            if tabs.is_empty() {
+                active_tab.set(None);
+                content_sig.set(String::new());
+                is_saved.set(true);
+            } else if Some(&doc) == active_tab.read().as_ref() {
+                let new_idx = idx.unwrap_or(0).min(tabs.len().saturating_sub(1));
+                if let Some(new_doc) = tabs.get(new_idx).cloned() {
+                    if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                        content_sig.set(text);
+                    }
+                    active_tab.set(Some(new_doc));
+                }
+            }
+            chapter_version += 1;
+        }
+    };
+
+    let on_content_change = {
+        let mut tab_content = tab_content.clone();
+        let mut is_saved = is_saved.clone();
+        let active_tab = active_tab.clone();
+        let mut content_sig = content.clone();
+        move |text: String| {
+            content_sig.set(text.clone());
+            if let Some(ref doc) = *active_tab.read() {
+                tab_content.write().insert(doc.clone(), text);
+            }
+            is_saved.set(false);
+        }
+    };
+
+    let mut do_save_current = {
+        let project = project.clone();
+        let active_tab = active_tab.clone();
+        let tab_content = tab_content.clone();
+        let mut is_saved = is_saved.clone();
+        let mut save_notification = save_notification.clone();
+        let mut content_sig = content.clone();
+        move || {
+            let doc = active_tab.read().clone();
+            let p = project.read().clone();
+            if let (Some(d), Some(ref proj)) = (doc, p) {
+                if let Some(text) = tab_content.read().get(&d).cloned() {
+                    match save_doc_content(proj, &d, &text) {
+                        Ok(_) => {
+                            *save_notification.write() = Some("保存しました".to_string());
+                            is_saved.set(true);
+                            content_sig.set(text);
+                        }
+                        Err(e) => {
+                            *save_notification.write() = Some(format!("保存エラー: {}", e));
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    let do_export = {
+        let project = project.clone();
+        let active_tab = active_tab.clone();
+        let tab_content = tab_content.clone();
+        move || {
+            let doc = active_tab.read().clone();
+            if let Some(d) = doc {
+                if let Some(ref proj) = *project.read() {
+                    if let Some(text) = tab_content.read().get(&d) {
+                        let default_name = match &d {
+                            DocRef::Tale { tale_file, .. } => tale_file.replace(".md", ".txt"),
+                            DocRef::Material { file_name, .. } => file_name.replace(".md", ".txt"),
+                        };
+                        let dir = rfd::FileDialog::new()
+                            .set_title("保存先を選択")
+                            .set_file_name(&default_name)
+                            .save_file();
+                        if let Some(path) = dir {
+                            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
+                            let output = if ext == "html" {
+                                let html = crate::markdown::renderer::render_to_html(text);
+                                format!(
+                                    "<!DOCTYPE html><html lang=ja><meta charset=utf-8><title>{}</title><body>{}</body></html>",
+                                    default_name.replace(".txt", ""),
+                                    html
+                                )
+                            } else {
+                                text.clone()
+                            };
+                            let _ = std::fs::write(&path, &output);
+                        }
+                    }
+                }
+            } else if let Some(ref proj) = *project.read() {
+                // No active doc — export all chapters as single file
+                let txt = proj.chapters.iter().flat_map(|ch| {
+                    ch.tales.iter().filter_map(|t| {
+                        fs::chapter::load_tale(proj, &ch.dir_name, &t.file_name).ok()
+                            .map(|c| format!("# {} / {}\n\n{}\n\n", ch.title, t.title, c))
+                    }).collect::<Vec<_>>()
+                }).collect::<Vec<_>>().join("---\n\n");
+                let dir = rfd::FileDialog::new()
+                    .set_title("保存先を選択")
+                    .set_file_name("全話.txt")
+                    .save_file();
+                if let Some(path) = dir {
+                    let _ = std::fs::write(&path, &txt);
+                }
+            }
+        }
+    };
+
+    // ── Project callbacks ──
+
+    let on_new_project = move |_| dialog_visible.set(true);
 
     let on_confirm_new = move |(name, author): (String, String)| {
         let mut proj_sig = project.clone();
@@ -234,37 +519,16 @@ pub fn App() -> Element {
         });
     };
 
-    let on_open_recent = move |path: String| {
-        let mut proj_sig = project.clone();
-        let mut notif = save_notification.clone();
-        let mut recent = recent_projects.clone();
-        spawn(async move {
-            let dir = std::path::PathBuf::from(&path);
-            if dir.exists() {
-                match fs::project::load_project(&dir) {
-                    Ok(p) => {
-                        push_recent(&mut recent.write(), path);
-                        *proj_sig.write() = Some(p);
-                    }
-                    Err(e) => {
-                        *notif.write() = Some(format!("開くエラー: {}", e));
-                    }
-                }
-            } else {
-                *notif.write() = Some("プロジェクトが見つかりません".to_string());
-                recent.write().retain(|x| x != &path);
-            }
-        });
-    };
-
     let on_save = move |_| {
-        do_save(&project, &content, &selected_chapter, &mut is_saved, &mut save_notification);
+        do_save_current();
     };
 
     let on_export = move |_| {
-        do_export(&project, &content, &selected_chapter);
+        do_export();
     };
 
+    let desktop_apply_visibility = desktop.clone();
+    let desktop_toggle_dark = desktop.clone();
     let on_toggle_dark = move |_| {
         let new_val = !*is_dark.read();
         is_dark.set(new_val);
@@ -273,125 +537,438 @@ pub fn App() -> Element {
         } else {
             "document.documentElement.classList.remove('dark')"
         };
-        let _ = desktop.webview.evaluate_script(js);
+        let _ = desktop_toggle_dark.webview.evaluate_script(js);
     };
 
-    let on_toggle_sidebar = move |_| {
-        let v = !*show_sidebar.read();
-        show_sidebar.set(v);
-    };
-    let on_toggle_editor = move |_| {
-        let v = !*show_editor.read();
-        show_editor.set(v);
-    };
-    let on_toggle_preview = move |_| {
-        let v = !*show_preview.read();
-        show_preview.set(v);
-    };
+    let on_toggle_sidebar = move |_| { let v = !*show_sidebar.read(); show_sidebar.set(v); };
+    let on_toggle_editor = move |_| { let v = !*show_editor.read(); show_editor.set(v); };
+    let on_toggle_preview = move |_| { let v = !*show_preview.read(); show_preview.set(v); };
+    let on_toggle_focus_mode = move |_| { let v = !*focus_mode.read(); focus_mode.set(v); };
+    let on_increase_font = move |_| { let mut f = font_size.write(); if *f < 32 { *f += 1; } };
+    let on_decrease_font = move |_| { let mut f = font_size.write(); if *f > 8 { *f -= 1; } };
 
-    let on_toggle_focus_mode = move |_| {
-        let v = !*focus_mode.read();
-        focus_mode.set(v);
-    };
+    // ── Chapter / Tale / Material CRUD ──
 
-    let on_increase_font = move |_| {
-        let mut f = font_size.write();
-        if *f < 32 { *f += 1; }
-    };
-
-    let on_decrease_font = move |_| {
-        let mut f = font_size.write();
-        if *f > 8 { *f -= 1; }
-    };
-
-    let on_add_chapter = move |title: String| {
-        let mut proj = project.write();
-        if let Some(ref mut p) = *proj {
-            let entry = p.add_chapter(&title);
-            let _ = fs::project::save_project(p);
-            let fname = entry.file_name.clone();
-            drop(proj);
-            selected_chapter.set(fname);
-            content.set(String::new());
-            is_saved.set(true);
-            *chapter_version.write() += 1;
-        }
-    };
-
-    let on_delete_chapter = move |file_name: String| {
-        let mut proj = project.write();
-        if let Some(ref mut p) = *proj {
-            p.remove_chapter(&file_name);
-            let _ = fs::project::save_project(p);
-            let _ = std::fs::remove_file(p.chapter_path(&file_name));
-            drop(proj);
-            if *selected_chapter.read() == file_name {
-                selected_chapter.set(String::new());
-                content.set(String::new());
-                *chapter_version.write() += 1;
-            }
-        }
-    };
-
-    let on_rename_chapter = move |(file_name, current_title): (String, String)| {
-        rename_target.set((file_name, current_title));
-        rename_dialog_visible.set(true);
-    };
-
-    let on_confirm_rename = move |(file_name, new_title): (String, String)| {
-        let mut proj = project.write();
-        if let Some(ref mut p) = *proj {
-            if let Some(old_name) = p.rename_chapter(&file_name, &new_title) {
-                let old_path = p.chapter_path(&old_name);
-                let new_path = p.chapter_path(&file_name);
-                if old_path != new_path {
-                    let _ = std::fs::rename(&old_path, &new_path);
-                }
+    let on_add_chapter = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        move |title: String| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                p.add_chapter(&title);
                 let _ = fs::project::save_project(p);
-                if *selected_chapter.read() == old_name || *selected_chapter.read() == file_name {
-                    selected_chapter.set(file_name);
+                let _ = fs::chapter::create_chapter_dir(p, &title);
+                *save_notification.write() = Some("章を追加しました".to_string());
+            }
+        }
+    };
+
+    let on_delete_chapter = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut active_tab = active_tab.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut content_sig = content.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut is_saved = is_saved.clone();
+        move |dir_name: String| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                if let Some(ch) = p.chapters.iter().find(|c| c.dir_name == dir_name) {
+                    // Close all tabs for this chapter
+                    let close_docs: Vec<DocRef> = ch.tales.iter().map(|t| DocRef::Tale {
+                        chapter_dir: dir_name.clone(),
+                        tale_file: t.file_name.clone(),
+                        chapter_title: ch.title.clone(),
+                        tale_title: t.title.clone(),
+                    }).collect();
+                    for doc in &close_docs {
+                        tab_content.write().remove(doc);
+                    }
+                    let mut tabs = open_tabs.write();
+                    tabs.retain(|t| !close_docs.contains(t));
+                    if tabs.is_empty() {
+                        active_tab.set(None);
+                        content_sig.set(String::new());
+                        is_saved.set(true);
+                    } else {
+                        let needs_switch = {
+                            let active = active_tab.read();
+                            active.as_ref().map_or(false, |a| close_docs.contains(a))
+                        };
+                        if needs_switch {
+                            let new_doc = tabs[0].clone();
+                            if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                                content_sig.set(text);
+                            }
+                            active_tab.set(Some(new_doc));
+                        }
+                    }
+                }
+
+                let _ = fs::chapter::delete_chapter_dir(p, &dir_name);
+                p.remove_chapter(&dir_name);
+                let _ = fs::project::save_project(p);
+                chapter_version += 1;
+            }
+        }
+    };
+
+    let on_rename_chapter = {
+        let mut rename_target = rename_target.clone();
+        let mut rename_dialog_visible = rename_dialog_visible.clone();
+        move |(dir_name, current_title): (String, String)| {
+            rename_target.set((dir_name, current_title));
+            rename_dialog_visible.set(true);
+        }
+    };
+
+    let mut on_confirm_rename = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut active_tab = active_tab.clone();
+        move |(old_dir, new_title): (String, String)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                let old_ch_title = p.chapters.iter()
+                    .find(|c| c.dir_name == old_dir)
+                    .map(|c| c.title.clone())
+                    .unwrap_or_default();
+                if let Some(old_dir_name) = p.rename_chapter(&old_dir, &new_title) {
+                    let _ = fs::chapter::rename_chapter_dir(p, &old_dir_name, &old_dir);
+                    let _ = fs::project::save_project(p);
+
+                    // Update tabs referencing this chapter
+                    let mut tabs = open_tabs.write();
+                    for t in tabs.iter_mut() {
+                        if let DocRef::Tale { chapter_dir, chapter_title, .. } = t {
+                            if *chapter_dir == old_dir {
+                                *chapter_dir = old_dir.clone();
+                                *chapter_title = new_title.clone();
+                            }
+                        }
+                    }
+                    let mut tc = tab_content.write();
+                    let old_tabs: Vec<DocRef> = tc.keys().filter(|k| {
+                        matches!(k, DocRef::Tale { chapter_dir, .. } if *chapter_dir == old_dir)
+                    }).cloned().collect();
+                    for old_t in old_tabs {
+                        if let DocRef::Tale { chapter_dir: cd, tale_file, tale_title, .. } = &old_t {
+                            let new_t = DocRef::Tale {
+                                chapter_dir: old_dir.clone(),
+                                tale_file: tale_file.clone(),
+                                chapter_title: new_title.clone(),
+                                tale_title: tale_title.clone(),
+                            };
+                            if let Some(v) = tc.remove(&old_t) {
+                                tc.insert(new_t, v);
+                            }
+                        }
+                    }
+                    if let Some(ref mut active) = *active_tab.write() {
+                        if let DocRef::Tale { chapter_dir, chapter_title, .. } = active {
+                            if *chapter_dir == old_dir {
+                                *chapter_dir = old_dir.clone();
+                                *chapter_title = new_title.clone();
+                            }
+                        }
+                    }
+                    chapter_version += 1;
                 }
             }
         }
     };
 
-    let mut loading_chapter_version = chapter_version.clone();
-    use_effect(use_reactive(&(project, selected_chapter), move |(proj, ch)| {
-        if let Some(ref p) = *proj.read() {
-            let fname = ch.read().clone();
-            if !fname.is_empty() {
-                match fs::chapter::load_chapter(p, &fname) {
-                    Ok(text) => {
-                        content.set(text);
-                        is_saved.set(true);
-                        *loading_chapter_version.write() += 1;
+    let on_add_tale = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        move |(chapter_dir, title): (String, String)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                if let Some(entry) = p.add_tale(&chapter_dir, &title) {
+                    let ch_title = p.chapters.iter()
+                        .find(|c| c.dir_name == chapter_dir)
+                        .map(|c| c.title.clone())
+                        .unwrap_or_default();
+                    let doc = DocRef::Tale {
+                        chapter_dir: chapter_dir.clone(),
+                        tale_file: entry.file_name.clone(),
+                        chapter_title: ch_title,
+                        tale_title: entry.title.clone(),
+                    };
+                    match fs::chapter::save_tale(p, &chapter_dir, &entry.file_name, "") {
+                        Ok(_) => {}
+                        Err(e) => {
+                            *save_notification.write() = Some(format!("作成エラー: {}", e));
+                        }
                     }
-                    Err(_) => {}
+                    let _ = fs::project::save_project(p);
+                    chapter_version += 1;
                 }
             }
+        }
+    };
+
+    let on_delete_tale = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut active_tab = active_tab.clone();
+        let mut content_sig = content.clone();
+        let mut is_saved = is_saved.clone();
+        move |(chapter_dir, tale_file): (String, String)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                let doc = DocRef::Tale {
+                    chapter_dir: chapter_dir.clone(),
+                    tale_file: tale_file.clone(),
+                    chapter_title: String::new(),
+                    tale_title: String::new(),
+                };
+                tab_content.write().remove(&doc);
+                let mut tabs = open_tabs.write();
+                tabs.retain(|t| t != &doc);
+                if tabs.is_empty() {
+                    active_tab.set(None);
+                    content_sig.set(String::new());
+                    is_saved.set(true);
+                } else if Some(&doc) == active_tab.read().as_ref() {
+                    let new_doc = tabs[0].clone();
+                    if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                        content_sig.set(text);
+                    }
+                    active_tab.set(Some(new_doc));
+                }
+
+                let _ = fs::chapter::delete_tale_file(p, &chapter_dir, &tale_file);
+                p.remove_tale(&chapter_dir, &tale_file);
+                let _ = fs::project::save_project(p);
+                chapter_version += 1;
+            }
+        }
+    };
+
+    let on_rename_tale = {
+        let mut rename_target = rename_target.clone();
+        let mut rename_dialog_visible = rename_dialog_visible.clone();
+        move |(chapter_dir, tale_file, current_title): (String, String, String)| {
+            rename_target.set((format!("{}|{}", chapter_dir, tale_file), current_title));
+            rename_dialog_visible.set(true);
+        }
+    };
+
+    // Modified on_confirm_rename to handle tale format
+    let on_confirm_rename_tale = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut active_tab = active_tab.clone();
+        move |(key, new_title): (String, String)| {
+            // Split key: if contains '|' it's chapter_dir|tale_file, else plain
+            if let Some(sep) = key.find('|') {
+                let chapter_dir = key[..sep].to_string();
+                let old_file = key[sep + 1..].to_string();
+                let mut proj = project.write();
+                if let Some(ref mut p) = *proj {
+                    if let Some((old_f, new_f)) = p.rename_tale(&chapter_dir, &old_file, &new_title) {
+                        let ch_title = p.chapters.iter()
+                            .find(|c| c.dir_name == chapter_dir)
+                            .map(|c| c.title.clone())
+                            .unwrap_or_default();
+                        let _ = fs::chapter::rename_tale_file(p, &chapter_dir, &old_f, &new_f);
+                        let _ = fs::project::save_project(p);
+
+                        // Update tabs
+                        let old_doc = DocRef::Tale {
+                            chapter_dir: chapter_dir.clone(),
+                            tale_file: old_f.clone(),
+                            chapter_title: ch_title.clone(),
+                            tale_title: new_title.clone(),
+                        };
+                        let new_doc = DocRef::Tale {
+                            chapter_dir: chapter_dir.clone(),
+                            tale_file: new_f.clone(),
+                            chapter_title: ch_title,
+                            tale_title: new_title,
+                        };
+                        let mut tabs = open_tabs.write();
+                        for t in tabs.iter_mut() {
+                            if *t == old_doc {
+                                *t = new_doc.clone();
+                            }
+                        }
+                        let mut tc = tab_content.write();
+                        if let Some(v) = tc.remove(&old_doc) {
+                            tc.insert(new_doc.clone(), v);
+                        }
+                        if let Some(ref mut active) = *active_tab.write() {
+                            if *active == old_doc {
+                                *active = new_doc;
+                            }
+                        }
+                        chapter_version += 1;
+                    }
+                }
+            } else {
+                (on_confirm_rename)((key, new_title));
+            }
+        }
+    };
+
+    let on_add_material = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        move |(title, category): (String, crate::model::MaterialCategory)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                let entry = p.add_material(&title, category);
+                let _ = fs::material::save_material(p, &entry.file_name, "");
+                let _ = fs::project::save_project(p);
+                chapter_version += 1;
+            }
+        }
+    };
+
+    let on_delete_material = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut active_tab = active_tab.clone();
+        let mut content_sig = content.clone();
+        let mut is_saved = is_saved.clone();
+        move |file_name: String| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                let doc = DocRef::Material {
+                    file_name: file_name.clone(),
+                    title: String::new(),
+                };
+                tab_content.write().remove(&doc);
+                let mut tabs = open_tabs.write();
+                tabs.retain(|t| t != &doc);
+                if tabs.is_empty() {
+                    active_tab.set(None);
+                    content_sig.set(String::new());
+                    is_saved.set(true);
+                } else if Some(&doc) == active_tab.read().as_ref() {
+                    let new_doc = tabs[0].clone();
+                    if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                        content_sig.set(text);
+                    }
+                    active_tab.set(Some(new_doc));
+                }
+
+                let _ = fs::material::delete_material_file(p, &file_name);
+                p.remove_material(&file_name);
+                let _ = fs::project::save_project(p);
+                chapter_version += 1;
+            }
+        }
+    };
+
+    let on_rename_material = {
+        let mut rename_target = rename_target.clone();
+        let mut rename_dialog_visible = rename_dialog_visible.clone();
+        move |(file_name, current_title): (String, String)| {
+            rename_target.set((file_name, current_title));
+            rename_dialog_visible.set(true);
+        }
+    };
+
+    let on_confirm_rename_material = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        let mut chapter_version = chapter_version.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut tab_content = tab_content.clone();
+        let mut active_tab = active_tab.clone();
+        move |(old_file, new_title): (String, String)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                if let Some(old_f) = p.rename_material(&old_file, &new_title) {
+                    let _ = fs::material::rename_material_file(p, &old_f, &old_file);
+                    let _ = fs::project::save_project(p);
+
+                    let old_doc = DocRef::Material {
+                        file_name: old_f.clone(),
+                        title: new_title.clone(),
+                    };
+                    let new_doc = DocRef::Material {
+                        file_name: old_file.clone(),
+                        title: new_title,
+                    };
+                    let mut tabs = open_tabs.write();
+                    for t in tabs.iter_mut() {
+                        if *t == old_doc {
+                            *t = new_doc.clone();
+                        }
+                    }
+                    let mut tc = tab_content.write();
+                    if let Some(v) = tc.remove(&old_doc) {
+                        tc.insert(new_doc.clone(), v);
+                    }
+                    if let Some(ref mut active) = *active_tab.write() {
+                        if *active == old_doc {
+                            *active = new_doc;
+                        }
+                    }
+                    chapter_version += 1;
+                }
+            }
+        }
+    };
+
+    // ── Recalculate panel widths on toggle ──
+    use_effect(use_reactive(&(show_sidebar, show_editor, show_preview), move |_| {
+        let _ = desktop_apply_visibility.webview.evaluate_script("if(window.__chronicle_apply) window.__chronicle_apply();");
+    }));
+
+    // ── Sync content changes back to tab_content ──
+
+    use_effect(use_reactive(&content, move |_| {
+        let text = content.read().clone();
+        if let Some(ref doc) = *active_tab.read() {
+            tab_content.write().insert(doc.clone(), text);
+            is_saved.set(false);
         }
     }));
 
+    // ── Auto-save ──
+
     let auto_save = auto_save_enabled.clone();
-    use_effect(use_reactive(&content, move |_| {
-        let mut is_saved = is_saved.clone();
-        let mut notif = save_notification.clone();
-        let proj = project.clone();
-        let ch = selected_chapter.clone();
-        let enabled = auto_save.clone();
-        if *enabled.read() {
-            is_saved.set(false);
-            let proj_c = proj.clone();
-            let ch_c = ch.clone();
-            let c = content.clone();
-            let s = is_saved.clone();
+    use_effect(use_reactive(&tab_content, move |_| {
+        let auto_save = auto_save.clone();
+        if *auto_save.read() {
+            let proj = project.clone();
+            let active = active_tab.clone();
+            let tc = tab_content.clone();
+            let mut notif = save_notification.clone();
             spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                do_save(&proj_c, &c, &ch_c, &mut s.clone(), &mut notif);
+                let doc = active.read().clone();
+                let p = proj.read().clone();
+                if let (Some(d), Some(ref proj)) = (doc, p) {
+                    if let Some(text) = tc.read().get(&d).cloned() {
+                        let _ = save_doc_content(proj, &d, &text);
+                    }
+                }
             });
         }
     }));
 
+    // Clear notification after 3s
     let notif_clone = save_notification.clone();
     use_effect(move || {
         if save_notification.read().is_some() {
@@ -402,6 +979,19 @@ pub fn App() -> Element {
             });
         }
     });
+
+    // ── Render ──
+
+    let sidebar_visible = *show_sidebar.read();
+    let preview_visible = *show_preview.read();
+    let editor_visible = *show_editor.read();
+
+    // Derive current content from active tab for editor
+    let editor_placeholder = match active_tab.read().as_ref() {
+        Some(DocRef::Tale { tale_title, .. }) => format!("「{}」を書き始めましょう...", tale_title),
+        Some(DocRef::Material { title, .. }) => format!("「{}」の内容を入力...", title),
+        None => "章・話を選択してください".to_string(),
+    };
 
     rsx! {
         style { "{styles::MAIN_CSS}" }
@@ -416,9 +1006,9 @@ pub fn App() -> Element {
                 on_export: on_export,
                 on_toggle_dark: on_toggle_dark,
                 is_dark: *is_dark.read(),
-                show_sidebar: *show_sidebar.read(),
-                show_editor: *show_editor.read(),
-                show_preview: *show_preview.read(),
+                show_sidebar: sidebar_visible,
+                show_editor: editor_visible,
+                show_preview: preview_visible,
                 focus_mode: *focus_mode.read(),
                 font_size: *font_size.read(),
                 on_toggle_sidebar: on_toggle_sidebar,
@@ -429,32 +1019,49 @@ pub fn App() -> Element {
                 on_decrease_font: on_decrease_font,
             }
             div { class: main_class,
-                aside { class: sidebar_class,
+                // Sidebar
+                if sidebar_visible {
                     Sidebar {
                         project: project,
-                        selected_chapter: selected_chapter,
+                        active_tab: active_tab,
+                        activity_tab: activity_tab,
                         on_add_chapter: on_add_chapter,
                         on_delete_chapter: on_delete_chapter,
                         on_rename_chapter: on_rename_chapter,
-                        recent_projects: recent_projects,
-                        on_open_recent: on_open_recent,
+                        on_add_tale: on_add_tale,
+                        on_delete_tale: on_delete_tale,
+                        on_rename_tale: on_rename_tale,
+                        on_add_material: on_add_material,
+                        on_delete_material: on_delete_material,
+                        on_rename_material: on_rename_material,
+                        on_open_doc: on_open_doc,
                     }
                 }
-                if *show_sidebar.read() {
+                if sidebar_visible {
                     div { id: "resize-sidebar", class: "resize-handle" }
                 }
-                div { class: editor_pane_class,
+                // Editor area
+                div { class: if *show_editor.read() { "editor-pane" } else { "editor-pane hidden" },
+                    // Tab bar
+                    TabBar {
+                        open_tabs: open_tabs,
+                        active_tab: active_tab,
+                        on_close_tab: on_close_tab,
+                        on_open_doc: on_open_doc,
+                    }
+                    // Editor
                     Editor {
                         content: content,
                         on_save: on_save,
                         chapter_version: *chapter_version.read(),
                         font_size: *font_size.read(),
+                        placeholder: editor_placeholder,
                     }
                 }
-                if *show_preview.read() {
+                if preview_visible {
                     div { id: "resize-preview", class: "resize-handle" }
                 }
-                div { class: preview_class,
+                div { class: if *show_preview.read() { "preview-pane" } else { "preview-pane hidden" },
                     Preview {
                         content: content,
                         writing_mode: writing_mode_str,
@@ -463,8 +1070,8 @@ pub fn App() -> Element {
             }
             StatusBar {
                 project: project,
-                selected_chapter: selected_chapter,
-                content: content,
+                active_tab: active_tab,
+                tab_content: tab_content,
                 is_saved: is_saved,
                 auto_save_enabled: auto_save_enabled,
                 writing_mode: writing_mode_str,
@@ -480,7 +1087,25 @@ pub fn App() -> Element {
             RenameDialog {
                 visible: rename_dialog_visible,
                 file_name: rename_target,
-                on_confirm: on_confirm_rename,
+                on_confirm: {
+                    let mut on_confirm_rename_tale = on_confirm_rename_tale.clone();
+                    let mut on_confirm_rename_material = on_confirm_rename_material.clone();
+                    move |(key, title): (String, String)| {
+            if key.contains('|') || key.contains(".md") {
+                    let p = project.read().clone();
+                    let is_material = p.as_ref().map(|p| {
+                        p.materials.iter().any(|m| m.file_name == key)
+                    }).unwrap_or(false);
+                    if is_material {
+                        (on_confirm_rename_material)((key, title));
+                    } else {
+                        (on_confirm_rename_tale)((key, title));
+                    }
+                } else {
+                    (on_confirm_rename)((key, title));
+                }
+                    }
+                },
             }
             if let Some(msg) = save_notification.read().as_ref() {
                 div { class: "notification", "{msg}" }

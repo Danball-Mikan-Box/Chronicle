@@ -10,6 +10,7 @@ pub fn create_project(name: &str, dir: &Path) -> Result<Project, String> {
     }
     fs::create_dir_all(&root_dir).map_err(|e| e.to_string())?;
     fs::create_dir_all(root_dir.join("chapters")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(root_dir.join("materials")).map_err(|e| e.to_string())?;
 
     let project = Project::new(name, root_dir.clone());
     save_project(&project)?;

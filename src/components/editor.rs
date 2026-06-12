@@ -77,6 +77,7 @@ pub fn Editor(
     on_save: EventHandler<()>,
     chapter_version: u32,
     font_size: u32,
+    placeholder: String,
 ) -> Element {
     let desktop = use_window();
 
@@ -194,7 +195,7 @@ pub fn Editor(
                 class: "editor",
                 oninput: move |evt| content.set(evt.value()),
                 onkeydown: on_keydown,
-                placeholder: "ここに物語を書いてください...\nCtrl+S: 保存  Ctrl+B: 太字  Ctrl+I: 斜体",
+                placeholder: "{placeholder}",
                 style: "font-size: {font_size}px;",
             }
         }

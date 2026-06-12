@@ -3,5 +3,6 @@ pub mod preview;
 pub mod sidebar;
 pub mod toolbar;
 pub mod formatting_bar;
+pub mod tab_bar;
 pub mod dialog;
 pub mod status_bar;
