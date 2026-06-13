@@ -87,7 +87,7 @@ pub fn export_site_zip(project: &Project, output_path: &Path) -> Result<(), Stri
             let html_body = crate::markdown::renderer::render_to_html(&tale_content);
             let filename = format!("{}-{}.html", ch.dir_name, tale.file_name.replace(".md", ""));
             let page_html = format!(
-                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{font-family:sans-serif;max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;}}h1{{margin-top:0;}}a{{color:#0066cc;text-decoration:none;}}a:hover{{text-decoration:underline;}}ul{{list-style:none;padding:0;}}li{{margin:0.5em 0;}}</style></head><body><h1>{}</h1>{}</body></html>",
+                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>:root{{--bg-paper:#faf8f5;--text-body:#2c2c2c;--text-heading:#5a4a3a;--text-muted:#8a7a6a}}body{{background:var(--bg-paper);color:var(--text-body);font-family:\"Noto Serif JP\",\"Yu Mincho\",\"游明朝\",serif;line-height:1.8;max-width:40rem;margin:2rem auto;padding:0 2rem}}h1{{color:var(--text-heading);margin-top:2rem}}p{{margin:0.8rem 0}}a{{color:#0066cc;text-decoration:none}}a:hover{{text-decoration:underline}}ul,ol{{margin-left:2rem}}blockquote{{border-left:.25rem solid #d0c8c0;padding-left:1rem;color:var(--text-muted);margin:1rem 0}}</style></head><body><h1>{}</h1>{}</body></html>",
                 tale.title, tale.title, html_body);
             pages.push((filename.clone(), page_html));
             toc.push_str(&format!("<li><a href=\"{}\">{}</a></li>\n", filename, tale.title));
@@ -95,8 +95,8 @@ pub fn export_site_zip(project: &Project, output_path: &Path) -> Result<(), Stri
         toc.push_str("</ul>\n");
     }
     
-    let index_html = format!(
-        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{font-family:sans-serif;max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;}}h1{{margin-top:0;}}a{{color:#0066cc;text-decoration:none;}}a:hover{{text-decoration:underline;}}ul{{list-style:none;padding:0;}}li{{margin:0.5em 0;}}</style></head><body>{}</body></html>",
+let index_html = format!(
+        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>:root{{--bg-paper:#faf8f5;--text-body:#2c2c2c;--text-heading:#5a4a3a;--text-muted:#8a7a6a}}body{{background:var(--bg-paper);color:var(--text-body);font-family:\"Noto Serif JP\",\"Yu Mincho\",\"游明朝\",serif;line-height:1.8;max-width:40rem;margin:2rem auto;padding:0 2rem}}h1,h2,h3,h4,h5,h6{{color:var(--text-heading);margin-top:2rem}}p{{margin:0.8rem 0}}a{{color:#0066cc;text-decoration:none}}a:hover{{text-decoration:underline}}ul,ol{{margin-left:2rem}}blockquote{{border-left:.25rem solid #d0c8c0;padding-left:1rem;color:var(--text-muted);margin:1rem 0}}</style></head><body>{}</body></html>",
         project.name, toc);
     zip.start_file("index.html", options).map_err(|e| e.to_string())?;
     zip.write_all(index_html.as_bytes()).map_err(|e| e.to_string())?;
