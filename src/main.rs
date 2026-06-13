@@ -18,9 +18,13 @@ fn main() {
             .expect("Failed to create icon")
     };
 
+    // IME-only message helper needed for Chrome/Edge embedded
+    // webviews when the title bar is removed.
+
     let cfg = dioxus_desktop::Config::new().with_window(
         dioxus_desktop::WindowBuilder::new()
             .with_title("Chronicle")
+            .with_decorations(false)
             .with_window_icon(Some(icon)),
     );
 

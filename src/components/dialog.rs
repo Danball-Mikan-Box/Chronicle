@@ -1,5 +1,66 @@
 use dioxus::prelude::*;
 
+use crate::model::project::{PanelPosition, ProjectSettings, SidebarPosition, WritingMode};
+
+#[derive(Debug, Clone)]
+pub enum PendingDelete {
+    Chapter(String),
+    Tale(String, String),
+    Material(String),
+}
+
+impl PendingDelete {
+    pub fn message(&self) -> String {
+        match self {
+            PendingDelete::Chapter(name) => format!("章「{}」を削除しますか？\nこの操作は元に戻せません。", name),
+            PendingDelete::Tale(ch, name) => format!("話「{}」({})を削除しますか？\nこの操作は元に戻せません。", name, ch),
+            PendingDelete::Material(name) => format!("資料「{}」を削除しますか？\nこの操作は元に戻せません。", name),
+        }
+    }
+}
+
+#[component]
+pub fn ConfirmDialog(
+    pending: Signal<Option<PendingDelete>>,
+    on_confirm: EventHandler<()>,
+) -> Element {
+    if pending.read().is_none() {
+        return Ok(VNode::placeholder());
+    }
+
+    let msg = pending.read().as_ref().map(|p| p.message()).unwrap_or_default();
+
+    let close = move |_| pending.set(None);
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { pending.set(None); }
+    };
+
+    rsx! {
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog", onclick: |e| e.stop_propagation(),
+                h2 { "削除の確認" }
+                div { class: "dialog-body",
+                    p { "{msg}" }
+                }
+                div { class: "dialog-actions",
+                    button {
+                        class: "dialog-btn",
+                        onclick: close,
+                        "キャンセル"
+                    }
+                    button {
+                        class: "dialog-btn danger",
+                        onclick: move |_| {
+                            on_confirm.call(());
+                        },
+                        "削除する"
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 pub fn ProjectDialog(
     visible: Signal<bool>,
@@ -130,6 +191,172 @@ pub fn RenameDialog(
                             }
                         },
                         "変更"
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn SettingsDialog(
+    visible: Signal<bool>,
+    project_name: Signal<String>,
+    project_settings: Signal<ProjectSettings>,
+    is_dark: Signal<bool>,
+    auto_save_enabled: Signal<bool>,
+    font_size: Signal<u32>,
+    on_save: EventHandler<(String, ProjectSettings)>,
+) -> Element {
+    if !*visible.read() {
+        return Ok(VNode::placeholder());
+    }
+
+    let settings = project_settings.read().clone();
+    let mut name = use_signal(|| project_name.read().clone());
+    let mut author = use_signal(|| settings.author.clone());
+    let mut description = use_signal(|| settings.description.clone());
+    let mut daily_goal = use_signal(|| settings.daily_goal.to_string());
+    let mut writing_mode = use_signal(|| settings.writing_mode);
+    let mut preview_position = use_signal(|| settings.preview_position);
+    let mut sidebar_position = use_signal(|| settings.sidebar_position);
+    let mut dark = use_signal(|| *is_dark.read());
+    let mut auto_save = use_signal(|| *auto_save_enabled.read());
+    let mut fs = use_signal(|| *font_size.read());
+
+    let close = move |_| visible.set(false);
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { visible.set(false); }
+    };
+
+    rsx! {
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog dialog-wide", onclick: |e| e.stop_propagation(),
+                h2 { "プロジェクト設定" }
+                div { class: "dialog-body",
+                    label { "作品名" }
+                    input {
+                        class: "dialog-input",
+                        value: "{name}",
+                        oninput: move |e| name.set(e.value()),
+                    }
+                    label { "作者名" }
+                    input {
+                        class: "dialog-input",
+                        value: "{author}",
+                        oninput: move |e| author.set(e.value()),
+                    }
+                    label { "説明" }
+                    textarea {
+                        class: "dialog-input dialog-textarea",
+                        value: "{description}",
+                        oninput: move |e| description.set(e.value()),
+                    }
+                    label { "1日の目標文字数" }
+                    input {
+                        class: "dialog-input",
+                        value: "{daily_goal}",
+                        oninput: move |e| daily_goal.set(e.value()),
+                    }
+                    label { "書字方向" }
+                    div { class: "dialog-radio-group",
+                        button {
+                            class: if *writing_mode.read() == WritingMode::Vertical { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| writing_mode.set(WritingMode::Vertical),
+                            "縦書き"
+                        }
+                        button {
+                            class: if *writing_mode.read() == WritingMode::Horizontal { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| writing_mode.set(WritingMode::Horizontal),
+                            "横書き"
+                        }
+                    }
+                    label { "プレビュー位置" }
+                    div { class: "dialog-radio-group",
+                        button {
+                            class: if *preview_position.read() == PanelPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| preview_position.set(PanelPosition::Right),
+                            "右"
+                        }
+                        button {
+                            class: if *preview_position.read() == PanelPosition::Bottom { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| preview_position.set(PanelPosition::Bottom),
+                            "下"
+                        }
+                    }
+                    label { "サイドバー位置" }
+                    div { class: "dialog-radio-group",
+                        button {
+                            class: if *sidebar_position.read() == SidebarPosition::Left { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| sidebar_position.set(SidebarPosition::Left),
+                            "左"
+                        }
+                        button {
+                            class: if *sidebar_position.read() == SidebarPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
+                            onclick: move |_| sidebar_position.set(SidebarPosition::Right),
+                            "右"
+                        }
+                    }
+                    label { "表示設定" }
+                    div { class: "dialog-checkbox-group",
+                        label { class: "dialog-checkbox",
+                            input {
+                                r#type: "checkbox",
+                                checked: *dark.read(),
+                                onchange: move |_| { let v = !*dark.read(); dark.set(v); },
+                            }
+                            "ダークモード"
+                        }
+                        label { class: "dialog-checkbox",
+                            input {
+                                r#type: "checkbox",
+                                checked: *auto_save.read(),
+                                onchange: move |_| { let v = !*auto_save.read(); auto_save.set(v); },
+                            }
+                            "自動保存"
+                        }
+                    }
+                    label { "フォントサイズ: {fs}" }
+                    input {
+                        r#type: "range",
+                        min: "8",
+                        max: "32",
+                        value: "{fs}",
+                        oninput: move |e| {
+                            if let Ok(v) = e.value().parse::<u32>() {
+                                fs.set(v);
+                            }
+                        },
+                    }
+                }
+                div { class: "dialog-actions",
+                    button {
+                        class: "dialog-btn",
+                        onclick: close,
+                        "キャンセル"
+                    }
+                    button {
+                        class: "dialog-btn primary",
+                        disabled: name.read().is_empty(),
+                        onclick: move |_| {
+                            let n = name.read().clone();
+                            if n.is_empty() { return; }
+                            let goal = daily_goal.read().parse::<usize>().unwrap_or(1000);
+                            let settings = ProjectSettings {
+                                author: author.read().clone(),
+                                description: description.read().clone(),
+                                daily_goal: goal,
+                                writing_mode: *writing_mode.read(),
+                                preview_position: *preview_position.read(),
+                                sidebar_position: *sidebar_position.read(),
+                            };
+                            is_dark.set(*dark.read());
+                            auto_save_enabled.set(*auto_save.read());
+                            font_size.set(*fs.read());
+                            on_save.call((n, settings));
+                            visible.set(false);
+                        },
+                        "保存"
                     }
                 }
             }

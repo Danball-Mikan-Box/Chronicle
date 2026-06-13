@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_desktop::use_window;
 
 use crate::model::project::{Project, WritingMode};
 
@@ -24,6 +25,7 @@ pub fn Toolbar(
     on_toggle_focus_mode: EventHandler<()>,
     on_increase_font: EventHandler<()>,
     on_decrease_font: EventHandler<()>,
+    on_settings: EventHandler<()>,
 ) -> Element {
     let text = content.read().clone();
     let char_count = text.chars().filter(|c| !c.is_whitespace()).count();
@@ -43,7 +45,37 @@ pub fn Toolbar(
         0
     };
 
+    let desktop = use_window();
+    let min_btn = desktop.clone();
+    let max_btn = desktop.clone();
+    let close_btn = desktop.clone();
+
     rsx! {
+        div {
+            class: "titlebar",
+            onmousedown: move |_| { desktop.drag(); },
+            span { class: "titlebar-text", "Chronicle" }
+            div { class: "titlebar-controls",
+                button {
+                    class: "titlebar-btn",
+                    onmousedown: |e| e.stop_propagation(),
+                    onclick: move |_| { min_btn.set_minimized(true); },
+                    "\u{2014}"
+                }
+                button {
+                    class: "titlebar-btn",
+                    onmousedown: |e| e.stop_propagation(),
+                    onclick: move |_| { max_btn.toggle_maximized(); },
+                    "\u{25A1}"
+                }
+                button {
+                    class: "titlebar-btn titlebar-close",
+                    onmousedown: |e| e.stop_propagation(),
+                    onclick: move |_| { close_btn.close(); },
+                    "\u{2715}"
+                }
+            }
+        }
         header {
             class: "toolbar",
             div { class: "toolbar-left",
@@ -67,6 +99,11 @@ pub fn Toolbar(
                     class: "toolbar-btn",
                     onclick: move |_| on_save.call(()),
                     "保存"
+                }
+                button {
+                    class: "toolbar-btn",
+                    onclick: move |_| on_settings.call(()),
+                    "設定"
                 }
                 span { class: "separator" }
                 button {

@@ -53,9 +53,8 @@ impl Project {
         let safe = Self::sanitize_name(new_title, 20).replace(' ', "-");
         let new_dir = format!("{:02}-{}", entry.order + 1, if safe.is_empty() { "無題" } else { &safe });
         entry.title = new_title.to_string();
-        let old = entry.dir_name.clone();
-        entry.dir_name = new_dir;
-        Some(old)
+        entry.dir_name = new_dir.clone();
+        Some(new_dir)
     }
 
     pub fn remove_chapter(&mut self, dir_name: &str) {

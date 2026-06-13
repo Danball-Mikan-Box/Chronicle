@@ -74,32 +74,22 @@ fn apply_format(sel: &str, kind: FormatKind) -> (String, usize, usize) {
 #[component]
 pub fn Editor(
     content: Signal<String>,
+    is_saved: Signal<bool>,
     on_save: EventHandler<()>,
-    chapter_version: u32,
     font_size: u32,
     placeholder: String,
 ) -> Element {
     let desktop = use_window();
     let mut is_composing = use_signal(|| false);
 
-    let desktop_sync = desktop.clone();
-    let composing_sync = is_composing.clone();
-    use_effect(use_reactive(&chapter_version, move |_| {
-        if *composing_sync.read() { return; }
-        let val = content.read().clone();
-        let js = format!(
-            r#"const e=document.querySelector('.editor');if(e){{e.value={};e.selectionStart=e.selectionEnd=e.value.length;e.focus();}}"#,
-            serde_json::to_string(&val).unwrap()
-        );
-        let _ = desktop_sync.webview.evaluate_script(&js);
-    }));
-
     let do_format: Rc<dyn Fn(FormatKind)> = {
         let content = content.clone();
+        let is_saved_fmt = is_saved.clone();
         let composing_fmt = is_composing.clone();
         Rc::new(move |kind: FormatKind| {
             if *composing_fmt.read() { return; }
             let mut content = content;
+            let mut is_saved_fmt = is_saved_fmt.clone();
             spawn(async move {
                 let js = r#"
                     const ta = document.querySelector('.editor');
@@ -156,6 +146,7 @@ pub fn Editor(
                 };
 
                 content.set(new_text.clone());
+                is_saved_fmt.set(false);
                 let _ = e.send(FormatResponse {
                     text: new_text,
                     sel_start: cursor_start,
@@ -191,6 +182,7 @@ pub fn Editor(
                 }
                 Key::Enter => {
                     let mut spawn_kd = content_kd.clone();
+                    let mut is_saved_enter = is_saved.clone();
                     if spawn_kd.read().ends_with('\u{300d}') {
                         evt.prevent_default();
                         spawn(async move {
@@ -204,6 +196,7 @@ pub fn Editor(
                             let mut e = eval(js);
                             if let Ok(new_val) = e.recv().await {
                                 spawn_kd.set(new_val);
+                                is_saved_enter.set(false);
                             }
                         });
                     }
@@ -223,8 +216,10 @@ pub fn Editor(
     };
 
     let on_input = {
+        let mut is_saved_inp = is_saved.clone();
         move |evt: Event<FormData>| {
             content.set(evt.value());
+            is_saved_inp.set(false);
         }
     };
 
@@ -233,6 +228,7 @@ pub fn Editor(
             FormattingBar { on_format: on_format }
             textarea {
                 class: "editor",
+                value: "{content}",
                 oninput: on_input,
                 onkeydown: on_keydown,
                 oncompositionstart: on_compositionstart,

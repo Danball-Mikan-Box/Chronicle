@@ -2,8 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use std::collections::HashMap;
 
-use crate::components::dialog::ProjectDialog;
-use crate::components::dialog::RenameDialog;
+use crate::components::dialog::{ConfirmDialog, PendingDelete, ProjectDialog, RenameDialog, SettingsDialog};
 use crate::components::editor::Editor;
 use crate::components::preview::Preview;
 use crate::components::sidebar::Sidebar;
@@ -11,7 +10,7 @@ use crate::components::status_bar::StatusBar;
 use crate::components::tab_bar::TabBar;
 use crate::components::toolbar::Toolbar;
 use crate::fs;
-use crate::model::{ActivityTab, DocRef, Project, WritingMode};
+use crate::model::{ActivityTab, DocRef, Project, ProjectSettings, WritingMode};
 use crate::styles;
 
 fn load_doc_content(p: &Project, doc: &DocRef) -> Result<String, String> {
@@ -80,6 +79,10 @@ pub fn App() -> Element {
     let auto_save_enabled = use_signal(|| true);
     let desktop = use_window();
 
+    let mut pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
+    let mut settings_visible = use_signal(|| false);
+    let mut project_name = use_signal(|| String::new());
+    let mut project_settings = use_signal(|| ProjectSettings::default());
     let mut chapter_version = use_signal(|| 0u32);
     let mut show_sidebar = use_signal(|| true);
     let mut show_editor = use_signal(|| true);
@@ -293,10 +296,12 @@ pub fn App() -> Element {
                 open_tabs.write().push(doc.clone());
             }
 
+            active_tab.set(Some(doc.clone()));
             if let Some(text) = tab_content.read().get(&doc).cloned() {
                 content_sig.set(text);
+            } else {
+                content_sig.set(String::new());
             }
-            active_tab.set(Some(doc));
             is_saved.set(true);
             chapter_version += 1;
         }
@@ -328,27 +333,13 @@ pub fn App() -> Element {
             } else if Some(&doc) == active_tab.read().as_ref() {
                 let new_idx = idx.unwrap_or(0).min(tabs.len().saturating_sub(1));
                 if let Some(new_doc) = tabs.get(new_idx).cloned() {
+                    active_tab.set(Some(new_doc.clone()));
                     if let Some(text) = tab_content.read().get(&new_doc).cloned() {
                         content_sig.set(text);
                     }
-                    active_tab.set(Some(new_doc));
                 }
             }
             chapter_version += 1;
-        }
-    };
-
-    let on_content_change = {
-        let mut tab_content = tab_content.clone();
-        let mut is_saved = is_saved.clone();
-        let active_tab = active_tab.clone();
-        let mut content_sig = content.clone();
-        move |text: String| {
-            content_sig.set(text.clone());
-            if let Some(ref doc) = *active_tab.read() {
-                tab_content.write().insert(doc.clone(), text);
-            }
-            is_saved.set(false);
         }
     };
 
@@ -379,14 +370,16 @@ pub fn App() -> Element {
         }
     };
 
-    let do_export = {
+    let mut do_export = {
         let project = project.clone();
         let active_tab = active_tab.clone();
         let tab_content = tab_content.clone();
+        let mut save_notification = save_notification.clone();
         move || {
             let doc = active_tab.read().clone();
             if let Some(d) = doc {
-                if let Some(ref proj) = *project.read() {
+                let proj = project.read().clone();
+                if let Some(ref proj) = proj {
                     if let Some(text) = tab_content.read().get(&d) {
                         let default_name = match &d {
                             DocRef::Tale { tale_file, .. } => tale_file.replace(".md", ".txt"),
@@ -409,23 +402,28 @@ pub fn App() -> Element {
                                 text.clone()
                             };
                             let _ = std::fs::write(&path, &output);
+                            *save_notification.write() = Some(format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
                         }
                     }
                 }
-            } else if let Some(ref proj) = *project.read() {
-                // No active doc — export all chapters as single file
-                let txt = proj.chapters.iter().flat_map(|ch| {
-                    ch.tales.iter().filter_map(|t| {
-                        fs::chapter::load_tale(proj, &ch.dir_name, &t.file_name).ok()
-                            .map(|c| format!("# {} / {}\n\n{}\n\n", ch.title, t.title, c))
-                    }).collect::<Vec<_>>()
-                }).collect::<Vec<_>>().join("---\n\n");
-                let dir = rfd::FileDialog::new()
-                    .set_title("保存先を選択")
-                    .set_file_name("全話.txt")
-                    .save_file();
-                if let Some(path) = dir {
-                    let _ = std::fs::write(&path, &txt);
+            } else {
+                let proj = project.read().clone();
+                if let Some(ref proj) = proj {
+                    // No active doc — export all chapters as single file
+                    let txt = proj.chapters.iter().flat_map(|ch| {
+                        ch.tales.iter().filter_map(|t| {
+                            fs::chapter::load_tale(proj, &ch.dir_name, &t.file_name).ok()
+                                .map(|c| format!("# {} / {}\n\n{}\n\n", ch.title, t.title, c))
+                        }).collect::<Vec<_>>()
+                    }).collect::<Vec<_>>().join("---\n\n");
+                    let dir = rfd::FileDialog::new()
+                        .set_title("保存先を選択")
+                        .set_file_name("全話.txt")
+                        .save_file();
+                    if let Some(path) = dir {
+                        let _ = std::fs::write(&path, &txt);
+                        *save_notification.write() = Some("全話を出力しました".to_string());
+                    }
                 }
             }
         }
@@ -509,6 +507,34 @@ pub fn App() -> Element {
     let on_increase_font = move |_| { let mut f = font_size.write(); if *f < 32 { *f += 1; } };
     let on_decrease_font = move |_| { let mut f = font_size.write(); if *f > 8 { *f -= 1; } };
 
+    let on_settings = {
+        let mut project = project.clone();
+        let mut settings_visible = settings_visible.clone();
+        let mut project_name = project_name.clone();
+        let mut project_settings = project_settings.clone();
+        move |_| {
+            if let Some(ref p) = *project.read() {
+                project_name.set(p.name.clone());
+                project_settings.set(p.settings.clone());
+            }
+            settings_visible.set(true);
+        }
+    };
+
+    let on_confirm_settings = {
+        let mut project = project.clone();
+        let mut save_notification = save_notification.clone();
+        move |(name, settings): (String, ProjectSettings)| {
+            let mut proj = project.write();
+            if let Some(ref mut p) = *proj {
+                p.name = name;
+                p.settings = settings;
+                let _ = fs::project::save_project(p);
+                *save_notification.write() = Some("設定を保存しました".to_string());
+            }
+        }
+    };
+
     // ── Chapter / Tale / Material CRUD ──
 
     let on_add_chapter = {
@@ -526,54 +552,9 @@ pub fn App() -> Element {
     };
 
     let on_delete_chapter = {
-        let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
-        let mut active_tab = active_tab.clone();
-        let mut open_tabs = open_tabs.clone();
-        let mut tab_content = tab_content.clone();
-        let mut content_sig = content.clone();
-        let mut chapter_version = chapter_version.clone();
-        let mut is_saved = is_saved.clone();
+        let mut pending_delete = pending_delete.clone();
         move |dir_name: String| {
-            let mut proj = project.write();
-            if let Some(ref mut p) = *proj {
-                if let Some(ch) = p.chapters.iter().find(|c| c.dir_name == dir_name) {
-                    // Close all tabs for this chapter
-                    let close_docs: Vec<DocRef> = ch.tales.iter().map(|t| DocRef::Tale {
-                        chapter_dir: dir_name.clone(),
-                        tale_file: t.file_name.clone(),
-                        chapter_title: ch.title.clone(),
-                        tale_title: t.title.clone(),
-                    }).collect();
-                    for doc in &close_docs {
-                        tab_content.write().remove(doc);
-                    }
-                    let mut tabs = open_tabs.write();
-                    tabs.retain(|t| !close_docs.contains(t));
-                    if tabs.is_empty() {
-                        active_tab.set(None);
-                        content_sig.set(String::new());
-                        is_saved.set(true);
-                    } else {
-                        let needs_switch = {
-                            let active = active_tab.read();
-                            active.as_ref().map_or(false, |a| close_docs.contains(a))
-                        };
-                        if needs_switch {
-                            let new_doc = tabs[0].clone();
-                            if let Some(text) = tab_content.read().get(&new_doc).cloned() {
-                                content_sig.set(text);
-                            }
-                            active_tab.set(Some(new_doc));
-                        }
-                    }
-                }
-
-                let _ = fs::chapter::delete_chapter_dir(p, &dir_name);
-                p.remove_chapter(&dir_name);
-                let _ = fs::project::save_project(p);
-                chapter_version += 1;
-            }
+            pending_delete.set(Some(PendingDelete::Chapter(dir_name)));
         }
     };
 
@@ -596,12 +577,8 @@ pub fn App() -> Element {
         move |(old_dir, new_title): (String, String)| {
             let mut proj = project.write();
             if let Some(ref mut p) = *proj {
-                let old_ch_title = p.chapters.iter()
-                    .find(|c| c.dir_name == old_dir)
-                    .map(|c| c.title.clone())
-                    .unwrap_or_default();
-                if let Some(old_dir_name) = p.rename_chapter(&old_dir, &new_title) {
-                    let _ = fs::chapter::rename_chapter_dir(p, &old_dir_name, &old_dir);
+                if let Some(new_dir_name) = p.rename_chapter(&old_dir, &new_title) {
+                    let _ = fs::chapter::rename_chapter_dir(p, &old_dir, &new_dir_name);
                     let _ = fs::project::save_project(p);
 
                     // Update tabs referencing this chapter
@@ -609,7 +586,7 @@ pub fn App() -> Element {
                     for t in tabs.iter_mut() {
                         if let DocRef::Tale { chapter_dir, chapter_title, .. } = t {
                             if *chapter_dir == old_dir {
-                                *chapter_dir = old_dir.clone();
+                                *chapter_dir = new_dir_name.clone();
                                 *chapter_title = new_title.clone();
                             }
                         }
@@ -619,9 +596,9 @@ pub fn App() -> Element {
                         matches!(k, DocRef::Tale { chapter_dir, .. } if *chapter_dir == old_dir)
                     }).cloned().collect();
                     for old_t in old_tabs {
-                        if let DocRef::Tale { chapter_dir: cd, tale_file, tale_title, .. } = &old_t {
+                        if let DocRef::Tale { tale_file, tale_title, .. } = &old_t {
                             let new_t = DocRef::Tale {
-                                chapter_dir: old_dir.clone(),
+                                chapter_dir: new_dir_name.clone(),
                                 tale_file: tale_file.clone(),
                                 chapter_title: new_title.clone(),
                                 tale_title: tale_title.clone(),
@@ -634,8 +611,8 @@ pub fn App() -> Element {
                     if let Some(ref mut active) = *active_tab.write() {
                         if let DocRef::Tale { chapter_dir, chapter_title, .. } = active {
                             if *chapter_dir == old_dir {
-                                *chapter_dir = old_dir.clone();
-                                *chapter_title = new_title.clone();
+                                *chapter_dir = new_dir_name;
+                                *chapter_title = new_title;
                             }
                         }
                     }
@@ -677,43 +654,9 @@ pub fn App() -> Element {
     };
 
     let on_delete_tale = {
-        let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
-        let mut chapter_version = chapter_version.clone();
-        let mut open_tabs = open_tabs.clone();
-        let mut tab_content = tab_content.clone();
-        let mut active_tab = active_tab.clone();
-        let mut content_sig = content.clone();
-        let mut is_saved = is_saved.clone();
+        let mut pending_delete = pending_delete.clone();
         move |(chapter_dir, tale_file): (String, String)| {
-            let mut proj = project.write();
-            if let Some(ref mut p) = *proj {
-                let doc = DocRef::Tale {
-                    chapter_dir: chapter_dir.clone(),
-                    tale_file: tale_file.clone(),
-                    chapter_title: String::new(),
-                    tale_title: String::new(),
-                };
-                tab_content.write().remove(&doc);
-                let mut tabs = open_tabs.write();
-                tabs.retain(|t| t != &doc);
-                if tabs.is_empty() {
-                    active_tab.set(None);
-                    content_sig.set(String::new());
-                    is_saved.set(true);
-                } else if Some(&doc) == active_tab.read().as_ref() {
-                    let new_doc = tabs[0].clone();
-                    if let Some(text) = tab_content.read().get(&new_doc).cloned() {
-                        content_sig.set(text);
-                    }
-                    active_tab.set(Some(new_doc));
-                }
-
-                let _ = fs::chapter::delete_tale_file(p, &chapter_dir, &tale_file);
-                p.remove_tale(&chapter_dir, &tale_file);
-                let _ = fs::project::save_project(p);
-                chapter_version += 1;
-            }
+            pending_delete.set(Some(PendingDelete::Tale(chapter_dir, tale_file)));
         }
     };
 
@@ -802,40 +745,126 @@ pub fn App() -> Element {
     };
 
     let on_delete_material = {
+        let mut pending_delete = pending_delete.clone();
+        move |file_name: String| {
+            pending_delete.set(Some(PendingDelete::Material(file_name)));
+        }
+    };
+
+    let on_confirm_delete = {
         let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
-        let mut chapter_version = chapter_version.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
         let mut active_tab = active_tab.clone();
         let mut content_sig = content.clone();
         let mut is_saved = is_saved.clone();
-        move |file_name: String| {
-            let mut proj = project.write();
-            if let Some(ref mut p) = *proj {
-                let doc = DocRef::Material {
-                    file_name: file_name.clone(),
-                    title: String::new(),
-                };
-                tab_content.write().remove(&doc);
-                let mut tabs = open_tabs.write();
-                tabs.retain(|t| t != &doc);
-                if tabs.is_empty() {
-                    active_tab.set(None);
-                    content_sig.set(String::new());
-                    is_saved.set(true);
-                } else if Some(&doc) == active_tab.read().as_ref() {
-                    let new_doc = tabs[0].clone();
-                    if let Some(text) = tab_content.read().get(&new_doc).cloned() {
-                        content_sig.set(text);
+        let mut chapter_version = chapter_version.clone();
+        let mut pending_delete = pending_delete.clone();
+        move |()| {
+            let action = pending_delete.read().clone();
+            if let Some(action) = action {
+                let mut proj = project.write();
+                if let Some(ref mut p) = *proj {
+                    match action {
+                        PendingDelete::Chapter(dir_name) => {
+                            // Remove all tab entries for this chapter
+                            let close_keys: Vec<DocRef> = tab_content.read().keys()
+                                .filter(|k| matches!(k, DocRef::Tale { chapter_dir: cd, .. } if *cd == dir_name))
+                                .cloned().collect();
+                            for k in close_keys {
+                                tab_content.write().remove(&k);
+                            }
+                            let was_active = open_tabs.read().iter().any(|t|
+                                matches!(t, DocRef::Tale { chapter_dir: cd, .. } if *cd == dir_name)
+                                && Some(t.clone()) == active_tab.read().as_ref().cloned()
+                            );
+                            let mut tabs = open_tabs.write();
+                            tabs.retain(|t| !matches!(t, DocRef::Tale { chapter_dir: cd, .. } if *cd == dir_name));
+                            if tabs.is_empty() {
+                                drop(tabs);
+                                active_tab.set(None);
+                                content_sig.set(String::new());
+                                is_saved.set(true);
+                            } else if was_active {
+                                let new_doc = tabs[0].clone();
+                                drop(tabs);
+                                active_tab.set(Some(new_doc.clone()));
+                                if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                                    content_sig.set(text);
+                                }
+                            }
+                            let _ = fs::chapter::delete_chapter_dir(p, &dir_name);
+                            p.remove_chapter(&dir_name);
+                        }
+                        PendingDelete::Tale(chapter_dir, tale_file) => {
+                            // Remove from tab_content: match by chapter_dir + tale_file
+                            let keys_to_remove: Vec<DocRef> = tab_content.read().keys()
+                                .filter(|k| matches!(k, DocRef::Tale { chapter_dir: cd, tale_file: tf, .. }
+                                    if *cd == chapter_dir && *tf == tale_file))
+                                .cloned().collect();
+                            for k in keys_to_remove {
+                                tab_content.write().remove(&k);
+                            }
+                            let was_active = open_tabs.read().iter().any(|t|
+                                matches!(t, DocRef::Tale { chapter_dir: cd, tale_file: tf, .. }
+                                    if *cd == chapter_dir && *tf == tale_file)
+                                && Some(t.clone()) == active_tab.read().as_ref().cloned()
+                            );
+                            let mut tabs = open_tabs.write();
+                            tabs.retain(|t| !matches!(t, DocRef::Tale { chapter_dir: cd, tale_file: tf, .. }
+                                if *cd == chapter_dir && *tf == tale_file));
+                            drop(tabs);
+                            if open_tabs.read().is_empty() {
+                                active_tab.set(None);
+                                content_sig.set(String::new());
+                                is_saved.set(true);
+                            } else if was_active {
+                                let new_doc = open_tabs.read()[0].clone();
+                                active_tab.set(Some(new_doc.clone()));
+                                if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                                    content_sig.set(text);
+                                }
+                            }
+                            let _ = fs::chapter::delete_tale_file(p, &chapter_dir, &tale_file);
+                            p.remove_tale(&chapter_dir, &tale_file);
+                        }
+                        PendingDelete::Material(file_name) => {
+                            // Remove from tab_content: match by file_name
+                            let keys_to_remove: Vec<DocRef> = tab_content.read().keys()
+                                .filter(|k| matches!(k, DocRef::Material { file_name: fn_, .. }
+                                    if *fn_ == file_name))
+                                .cloned().collect();
+                            for k in keys_to_remove {
+                                tab_content.write().remove(&k);
+                            }
+                            let was_active = open_tabs.read().iter().any(|t|
+                                matches!(t, DocRef::Material { file_name: fn_, .. }
+                                    if *fn_ == file_name)
+                                && Some(t.clone()) == active_tab.read().as_ref().cloned()
+                            );
+                            let mut tabs = open_tabs.write();
+                            tabs.retain(|t| !matches!(t, DocRef::Material { file_name: fn_, .. }
+                                if *fn_ == file_name));
+                            drop(tabs);
+                            if open_tabs.read().is_empty() {
+                                active_tab.set(None);
+                                content_sig.set(String::new());
+                                is_saved.set(true);
+                            } else if was_active {
+                                let new_doc = open_tabs.read()[0].clone();
+                                active_tab.set(Some(new_doc.clone()));
+                                if let Some(text) = tab_content.read().get(&new_doc).cloned() {
+                                    content_sig.set(text);
+                                }
+                            }
+                            let _ = fs::material::delete_material_file(p, &file_name);
+                            p.remove_material(&file_name);
+                        }
                     }
-                    active_tab.set(Some(new_doc));
+                    let _ = fs::project::save_project(p);
+                    chapter_version += 1;
                 }
-
-                let _ = fs::material::delete_material_file(p, &file_name);
-                p.remove_material(&file_name);
-                let _ = fs::project::save_project(p);
-                chapter_version += 1;
+                pending_delete.set(None);
             }
         }
     };
@@ -898,37 +927,47 @@ pub fn App() -> Element {
     }));
 
     // ── Sync content changes back to tab_content ──
+    // (plain use_effect + value comparison, avoids use_reactive reliability issues)
 
-    use_effect(use_reactive(&content, move |_| {
-        let text = content.read().clone();
-        if let Some(ref doc) = *active_tab.read() {
-            tab_content.write().insert(doc.clone(), text);
-            is_saved.set(false);
+    use_effect({
+        let mut prev = use_signal(|| String::new());
+        move || {
+            let cur = content.read().clone();
+            if cur != *prev.read() {
+                prev.set(cur.clone());
+                if let Some(ref doc) = *active_tab.read() {
+                    tab_content.write().insert(doc.clone(), cur);
+                }
+            }
         }
-    }));
+    });
 
     // ── Auto-save ──
 
     let auto_save = auto_save_enabled.clone();
-    use_effect(use_reactive(&tab_content, move |_| {
-        let auto_save = auto_save.clone();
-        if *auto_save.read() {
-            let proj = project.clone();
-            let active = active_tab.clone();
-            let tc = tab_content.clone();
-            let mut notif = save_notification.clone();
-            spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                let doc = active.read().clone();
-                let p = proj.read().clone();
-                if let (Some(d), Some(ref proj)) = (doc, p) {
-                    if let Some(text) = tc.read().get(&d).cloned() {
-                        let _ = save_doc_content(proj, &d, &text);
+    use_effect({
+        let mut last_tc = use_signal(|| String::new());
+        move || {
+            let doc = active_tab.read().clone();
+            let cur = doc.as_ref()
+                .and_then(|d| tab_content.read().get(d).cloned())
+                .unwrap_or_default();
+            if cur != *last_tc.read() && *auto_save.read() {
+                last_tc.set(cur.clone());
+                let proj = project.clone();
+                let tc = tab_content.clone();
+                spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    let p = proj.read().clone();
+                    if let (Some(d), Some(ref proj)) = (doc, p) {
+                        if let Some(text) = tc.read().get(&d).cloned() {
+                            let _ = save_doc_content(proj, &d, &text);
+                        }
                     }
-                }
-            });
+                });
+            }
         }
-    }));
+    });
 
     // Clear notification after 3s
     let notif_clone = save_notification.clone();
@@ -947,6 +986,7 @@ pub fn App() -> Element {
     let sidebar_visible = *show_sidebar.read();
     let preview_visible = *show_preview.read();
     let editor_visible = *show_editor.read();
+    let recent_list = recent_projects.read().clone();
 
     // Derive current content from active tab for editor
     let editor_placeholder = match active_tab.read().as_ref() {
@@ -979,6 +1019,7 @@ pub fn App() -> Element {
                 on_toggle_focus_mode: on_toggle_focus_mode,
                 on_increase_font: on_increase_font,
                 on_decrease_font: on_decrease_font,
+                on_settings: on_settings,
             }
             div { class: main_class,
                 // Sidebar
@@ -1011,13 +1052,90 @@ pub fn App() -> Element {
                         on_close_tab: on_close_tab,
                         on_open_doc: on_open_doc,
                     }
-                    // Editor
-                    Editor {
-                        content: content,
-                        on_save: on_save,
-                        chapter_version: *chapter_version.read(),
-                        font_size: *font_size.read(),
-                        placeholder: editor_placeholder,
+                    // Editor or Welcome
+                    if active_tab.read().is_some() {
+                        Editor {
+                            content: content,
+                            is_saved: is_saved,
+                            on_save: on_save,
+                            font_size: *font_size.read(),
+                            placeholder: editor_placeholder,
+                        }
+                    } else {
+                        div { class: "welcome",
+                            h1 { "Chronicle" }
+                            p { "小説執筆支援アプリケーション" }
+                            div { class: "welcome-actions",
+                                button {
+                                    class: "welcome-btn",
+                                    onclick: move |_| dialog_visible.set(true),
+                                    "新規プロジェクト"
+                                }
+                                button {
+                                    class: "welcome-btn",
+                                    onclick: move |_| {
+                                        let mut proj_sig = project.clone();
+                                        let mut notif = save_notification.clone();
+                                        let mut recent = recent_projects.clone();
+                                        spawn(async move {
+                                            let dir = rfd::FileDialog::new()
+                                                .set_title("プロジェクトフォルダを選択")
+                                                .pick_folder();
+                                            if let Some(dir) = dir {
+                                                match crate::fs::project::load_project(&dir) {
+                                                    Ok(p) => {
+                                                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                                                        *proj_sig.write() = Some(p);
+                                                    }
+                                                    Err(e) => {
+                                                        *notif.write() = Some(format!("開くエラー: {}", e));
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    },
+                                    "プロジェクトを開く"
+                                }
+                            }
+                            if !recent_list.is_empty() {
+                                div { class: "welcome-recent",
+                                    h3 { "最近のプロジェクト" }
+                                    ul {
+                                        {recent_list.iter().rev().map(|dir| {
+                                            let d = dir.clone();
+                                            let name = std::path::Path::new(&d)
+                                                .file_name()
+                                                .and_then(|n| n.to_str())
+                                                .unwrap_or(&d)
+                                                .to_string();
+                                            rsx! {
+                                                li {
+                                                    class: "welcome-recent-item",
+                                                    onclick: move |_| {
+                                                        let mut proj_sig = project.clone();
+                                                        let mut notif = save_notification.clone();
+                                                        let mut recent = recent_projects.clone();
+                                                        let dir = d.clone();
+                                                        spawn(async move {
+                                                            match crate::fs::project::load_project(std::path::Path::new(&dir)) {
+                                                                Ok(p) => {
+                                                                    push_recent(&mut recent.write(), dir);
+                                                                    *proj_sig.write() = Some(p);
+                                                                }
+                                                                Err(e) => {
+                                                                    *notif.write() = Some(format!("開くエラー: {}", e));
+                                                                }
+                                                            }
+                                                        });
+                                                    },
+                                                    "{name}"
+                                                }
+                                            }
+                                        })}
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if preview_visible {
@@ -1068,6 +1186,19 @@ pub fn App() -> Element {
                 }
                     }
                 },
+            }
+            SettingsDialog {
+                visible: settings_visible,
+                project_name: project_name,
+                project_settings: project_settings,
+                is_dark: is_dark,
+                auto_save_enabled: auto_save_enabled,
+                font_size: font_size,
+                on_save: on_confirm_settings,
+            }
+            ConfirmDialog {
+                pending: pending_delete,
+                on_confirm: on_confirm_delete,
             }
             if let Some(msg) = save_notification.read().as_ref() {
                 div { class: "notification", "{msg}" }

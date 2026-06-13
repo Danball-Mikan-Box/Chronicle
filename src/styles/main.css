@@ -87,6 +87,53 @@ input, textarea, button {
     height: 100vh;
 }
 
+/* Title bar (frameless window) */
+.titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 12px;
+    background: var(--bg-toolbar);
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+}
+
+.titlebar-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.titlebar-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.titlebar-btn {
+    width: 32px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+}
+
+.titlebar-btn:hover {
+    background: var(--bg-hover);
+}
+
+.titlebar-close:hover {
+    background: #c0392b;
+    color: #fff;
+}
+
 /* Toolbar */
 .toolbar {
     display: flex;
@@ -98,7 +145,6 @@ input, textarea, button {
     gap: 12px;
     user-select: none;
     -webkit-user-select: none;
-    flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -405,6 +451,91 @@ input, textarea, button {
     flex-direction: column;
     min-width: 200px;
     overflow: hidden;
+}
+
+/* Welcome screen */
+.welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 16px;
+    text-align: center;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.welcome h1 {
+    font-size: clamp(20px, 5vw, 36px);
+    color: var(--text-muted);
+    font-weight: 300;
+    letter-spacing: 4px;
+}
+
+.welcome p {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.welcome-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.welcome-btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-btn);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.welcome-btn:hover {
+    background: var(--bg-hover);
+}
+
+.welcome-recent {
+    margin-top: 16px;
+    max-width: min(400px, 80vw);
+    width: 100%;
+}
+
+.welcome-recent h3 {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.welcome-recent ul {
+    list-style: none;
+    padding: 0;
+}
+
+.welcome-recent-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.welcome-recent-item:hover {
+    background: var(--bg-hover);
 }
 
 .editor-pane.hidden {
@@ -833,6 +964,13 @@ input, textarea, button {
     margin-bottom: 20px;
 }
 
+.dialog-body p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+}
+
 .dialog-body label {
     font-size: 12px;
     color: var(--text-muted);
@@ -882,9 +1020,62 @@ input, textarea, button {
     opacity: 0.9;
 }
 
+.dialog-btn.danger {
+    background: #c0392b;
+    color: #fff;
+    border-color: #c0392b;
+}
+
+.dialog-btn.danger:hover {
+    background: #e74c3c;
+}
+
 .dialog-btn:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+.dialog-wide {
+    min-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.dialog-textarea {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.dialog-radio-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.dialog-checkbox-group {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 4px;
+}
+
+.dialog-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.dialog-checkbox input[type="checkbox"] {
+    accent-color: var(--bg-active);
+}
+
+input[type="range"] {
+    width: 100%;
+    accent-color: var(--bg-active);
+    margin-bottom: 4px;
 }
 
 /* Notification */
