@@ -543,9 +543,9 @@ pub fn App() -> Element {
         move |title: String| {
             let mut proj = project.write();
             if let Some(ref mut p) = *proj {
-                p.add_chapter(&title);
+                let entry = p.add_chapter(&title);
                 let _ = fs::project::save_project(p);
-                let _ = fs::chapter::create_chapter_dir(p, &title);
+                let _ = fs::chapter::create_chapter_dir(p, &entry.dir_name);
                 *save_notification.write() = Some("章を追加しました".to_string());
             }
         }
@@ -692,32 +692,39 @@ pub fn App() -> Element {
                         let _ = fs::chapter::rename_tale_file(p, &chapter_dir, &old_f, &new_f);
                         let _ = fs::project::save_project(p);
 
-                        // Update tabs
-                        let old_doc = DocRef::Tale {
-                            chapter_dir: chapter_dir.clone(),
-                            tale_file: old_f.clone(),
-                            chapter_title: ch_title.clone(),
-                            tale_title: new_title.clone(),
-                        };
+                        // Update tabs — find old title from existing tabs
                         let new_doc = DocRef::Tale {
                             chapter_dir: chapter_dir.clone(),
                             tale_file: new_f.clone(),
-                            chapter_title: ch_title,
+                            chapter_title: ch_title.clone(),
                             tale_title: new_title,
                         };
                         let mut tabs = open_tabs.write();
                         for t in tabs.iter_mut() {
-                            if *t == old_doc {
-                                *t = new_doc.clone();
+                            if let DocRef::Tale { chapter_dir: cd, tale_file: tf, .. } = t {
+                                if *cd == chapter_dir && *tf == old_f {
+                                    *t = new_doc.clone();
+                                    break;
+                                }
                             }
                         }
+                        drop(tabs);
                         let mut tc = tab_content.write();
-                        if let Some(v) = tc.remove(&old_doc) {
-                            tc.insert(new_doc.clone(), v);
+                        // Find and migrate content by matching chapter_dir + old tale_file
+                        let old_key: Option<DocRef> = tc.keys()
+                            .find(|k| matches!(k, DocRef::Tale { chapter_dir: cd, tale_file: tf, .. } if *cd == chapter_dir && *tf == old_f))
+                            .cloned();
+                        if let Some(old_k) = old_key {
+                            if let Some(v) = tc.remove(&old_k) {
+                                tc.insert(new_doc.clone(), v);
+                            }
                         }
+                        drop(tc);
                         if let Some(ref mut active) = *active_tab.write() {
-                            if *active == old_doc {
-                                *active = new_doc;
+                            if let DocRef::Tale { chapter_dir: cd, tale_file: tf, .. } = active {
+                                if *cd == chapter_dir && *tf == old_f {
+                                    *active = new_doc;
+                                }
                             }
                         }
                         chapter_version += 1;
@@ -892,27 +899,36 @@ pub fn App() -> Element {
                     let _ = fs::material::rename_material_file(p, &old_f, &old_file);
                     let _ = fs::project::save_project(p);
 
-                    let old_doc = DocRef::Material {
-                        file_name: old_f.clone(),
-                        title: new_title.clone(),
-                    };
                     let new_doc = DocRef::Material {
                         file_name: old_file.clone(),
                         title: new_title,
                     };
+                    // Update tabs — match by old file_name instead of relying on title
                     let mut tabs = open_tabs.write();
                     for t in tabs.iter_mut() {
-                        if *t == old_doc {
-                            *t = new_doc.clone();
+                        if let DocRef::Material { file_name: f, .. } = t {
+                            if *f == old_f {
+                                *t = new_doc.clone();
+                                break;
+                            }
                         }
                     }
+                    drop(tabs);
                     let mut tc = tab_content.write();
-                    if let Some(v) = tc.remove(&old_doc) {
-                        tc.insert(new_doc.clone(), v);
+                    let old_key: Option<DocRef> = tc.keys()
+                        .find(|k| matches!(k, DocRef::Material { file_name: f, .. } if *f == old_f))
+                        .cloned();
+                    if let Some(old_k) = old_key {
+                        if let Some(v) = tc.remove(&old_k) {
+                            tc.insert(new_doc.clone(), v);
+                        }
                     }
+                    drop(tc);
                     if let Some(ref mut active) = *active_tab.write() {
-                        if *active == old_doc {
-                            *active = new_doc;
+                        if let DocRef::Material { file_name: f, .. } = active {
+                            if *f == old_f {
+                                *active = new_doc;
+                            }
                         }
                     }
                     chapter_version += 1;
