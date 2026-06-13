@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-dioxus = { version = "0.6", features = ["desktop", "document"] }
+dioxus = { version = "0.6", features = ["desktop", "mobile", "document"] }
 dioxus-desktop = "0.6"
 image = "0.25"
 pulldown-cmark = "0.13"
@@ -18,8 +18,21 @@ futures = "0.3"
 tokio = { version = "1", features = ["time"] }
 zip = "2"
 
+dioxus-mobile = "0.6"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 rfd = { version = "0.14", default-features = false }
+
+[features]
+# Enable default desktop build
+default = ["desktop"]
+
+# Desktop support (uses dioxus-desktop)
+desktop = []
+
+# Mobile support (adds dioxus-mobile)
+mobile = []
+

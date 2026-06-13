@@ -160,13 +160,18 @@ pub fn App() -> Element {
         c
     });
 
-    let desktop_top = desktop.clone();
-    use_effect(move || {
-        desktop_top.set_always_on_top(false);
-    });
+    #[cfg(not(target_os = "android"))]
+    {
+        let desktop_top = desktop.clone();
+        use_effect(move || {
+            desktop_top.set_always_on_top(false);
+        });
+    }
 
     // Resize JS
-    let desktop_ui = desktop.clone();
+    #[cfg(not(target_os = "android"))]
+    {
+        let desktop_ui = desktop.clone();
     use_effect(move || {
         let js = r#"
 (function() {
@@ -316,6 +321,7 @@ pub fn App() -> Element {
         let _ = desktop_ui.webview.evaluate_script(js);
     });
 
+    }
     // ── Helpers ──
 
     let mut switch_to_doc = {
@@ -446,6 +452,7 @@ pub fn App() -> Element {
                         .map(|d| d.short_label().replace(".md", ".html"))
                         .unwrap_or_else(|| "出力.html".to_string())
                 }
+                ExportFormat::SiteZip => "site.zip".to_string(),
             };
 
             let mut dialog = rfd::FileDialog::new()
@@ -453,7 +460,7 @@ pub fn App() -> Element {
                 .set_file_name(&default_name);
             
             let path = match format {
-                ExportFormat::ProjectZip | ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml => {
+                ExportFormat::ProjectZip | ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml | ExportFormat::SiteZip => {
                     dialog.add_filter("ZIP Archive", &["zip"]).save_file()
                 }
                 ExportFormat::ManuscriptSingleTxt | ExportFormat::CurrentFileTxt => {
@@ -473,6 +480,7 @@ pub fn App() -> Element {
                     ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml => {
                         crate::export::export_manuscript_zip(proj, format, &path)
                     }
+                    ExportFormat::SiteZip => crate::export::export_site_zip(proj, &path),
                     ExportFormat::CurrentFileTxt | ExportFormat::CurrentFileHtml => {
                         if let Some(doc) = active_tab.read().as_ref() {
                             if let Some(text) = tab_content.read().get(doc) {
@@ -484,6 +492,7 @@ pub fn App() -> Element {
                             Err("開いている話がありません".to_string())
                         }
                     }
+                    ,
                 };
 
                 match res {
@@ -1036,43 +1045,39 @@ pub fn App() -> Element {
     // ── Sync content changes back to tab_content ──
     // (plain use_effect + value comparison, avoids use_reactive reliability issues)
 
-    use_effect({
-        let mut prev = use_signal(|| String::new());
-        move || {
-            let cur = content.read().clone();
-            if cur != *prev.read() {
-                prev.set(cur.clone());
-                if let Some(ref doc) = *active_tab.read() {
-                    tab_content.write().insert(doc.clone(), cur);
-                }
+    let mut prev = use_signal(|| String::new());
+    use_effect(move || {
+        let cur = content.read().clone();
+        if cur != *prev.read() {
+            prev.set(cur.clone());
+            if let Some(ref doc) = *active_tab.read() {
+                tab_content.write().insert(doc.clone(), cur);
             }
         }
     });
 
     // ── Auto-save ──
 
-    let auto_save = auto_save_enabled.clone();
-    use_effect({
-        let mut last_tc = use_signal(|| String::new());
-        move || {
-            let doc = active_tab.read().clone();
-            let cur = doc.as_ref()
-                .and_then(|d| tab_content.read().get(d).cloned())
-                .unwrap_or_default();
-            if cur != *last_tc.read() && *auto_save.read() {
-                last_tc.set(cur.clone());
-                let proj = project.clone();
-                let tc = tab_content.clone();
-                spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    let p = proj.read().clone();
-                    if let (Some(d), Some(ref proj)) = (doc, p) {
-                        if let Some(text) = tc.read().get(&d).cloned() {
-                            let _ = save_doc_content(proj, &d, &text);
-                        }
+let auto_save = auto_save_enabled.clone();
+    let mut last_tc = use_signal(|| String::new());
+    use_effect(move || {
+        let doc = active_tab.read().clone();
+        let cur = doc.as_ref()
+            .and_then(|d| tab_content.read().get(d).cloned())
+            .unwrap_or_default();
+        if cur != *last_tc.read() && *auto_save.read() {
+            last_tc.set(cur.clone());
+            let proj = project.clone();
+            let tc = tab_content.clone();
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                let p = proj.read().clone();
+                if let (Some(d), Some(ref proj)) = (doc, p) {
+                    if let Some(text) = tc.read().get(&d).cloned() {
+                        let _ = save_doc_content(proj, &d, &text);
                     }
-                });
-            }
+                }
+            });
         }
     });
 
@@ -1188,22 +1193,22 @@ pub fn App() -> Element {
                                         let mut proj_sig = project.clone();
                                         let mut notif = save_notification.clone();
                                         let mut recent = recent_projects.clone();
-                                        spawn(async move {
-                                            let dir = rfd::FileDialog::new()
-                                                .set_title("プロジェクトフォルダを選択")
-                                                .pick_folder();
-                                            if let Some(dir) = dir {
-                                                match crate::fs::project::load_project(&dir) {
-                                                    Ok(p) => {
-                                                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
-                                                        *proj_sig.write() = Some(p);
-                                                    }
-                                                    Err(e) => {
-                                                        *notif.write() = Some(format!("開くエラー: {}", e));
-                                                    }
-                                                }
-                                            }
-                                        });
+spawn(async move {
+    let dir = rfd::FileDialog::new()
+        .set_title("プロジェクトフォルダを選択")
+        .pick_folder();
+    if let Some(dir) = dir {
+        match crate::fs::project::load_project(&dir) {
+            Ok(p) => {
+                push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                *proj_sig.write() = Some(p);
+            }
+            Err(e) => {
+                *notif.write() = Some(format!("開くエラー: {}", e));
+            }
+        }
+}
+        });
                                     },
                                     "プロジェクトを開く"
                                 }
@@ -1227,18 +1232,18 @@ pub fn App() -> Element {
                                                         let mut notif = save_notification.clone();
                                                         let mut recent = recent_projects.clone();
                                                         let dir = d.clone();
-                                                        spawn(async move {
-                                                            match crate::fs::project::load_project(std::path::Path::new(&dir)) {
-                                                                Ok(p) => {
-                                                                    push_recent(&mut recent.write(), dir);
-                                                                    *proj_sig.write() = Some(p);
-                                                                }
-                                                                Err(e) => {
-                                                                    *notif.write() = Some(format!("開くエラー: {}", e));
-                                                                }
-                                                            }
-                                                        });
-                                                    },
+                                                         spawn(async move {
+                                                             match crate::fs::project::load_project(std::path::Path::new(&dir)) {
+                                                                 Ok(p) => {
+                                                                     push_recent(&mut recent.write(), dir);
+                                                                     *proj_sig.write() = Some(p);
+                                                                 }
+                                                                 Err(e) => {
+                                                                     *notif.write() = Some(format!("開くエラー: {}", e));
+                                                                 }
+                                                             }
+                                                         });
+                                                     },
                                                     "{name}"
                                                 }
                                             }

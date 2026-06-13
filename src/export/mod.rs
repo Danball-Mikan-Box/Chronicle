@@ -13,6 +13,7 @@ pub enum ExportFormat {
     ManuscriptZipHtml,
     CurrentFileTxt,
     CurrentFileHtml,
+    SiteZip,
 }
 
 pub fn export_project_zip(project: &Project, output_path: &Path) -> Result<(), String> {
@@ -62,13 +63,52 @@ pub fn export_project_zip(project: &Project, output_path: &Path) -> Result<(), S
                 zip.write_all(&buffer).map_err(|e| e.to_string())?;
             }
         }
-        Ok(())
-    }
+    Ok(())
+}
 
     add_dir_to_zip(&mut zip, root, root, options)?;
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+pub fn export_site_zip(project: &Project, output_path: &Path) -> Result<(), String> {
+    let file = fs::File::create(output_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    
+    // Build index and pages
+    let mut toc = String::new();
+    let mut pages: Vec<(String, String)> = Vec::new();
+    for ch in &project.chapters {
+        toc.push_str(&format!("<h2>{}</h2>\n<ul>\n", ch.title));
+        for tale in &ch.tales {
+            let tale_content = crate::fs::chapter::load_tale(project, &ch.dir_name, &tale.file_name)?;
+            let html_body = crate::markdown::renderer::render_to_html(&tale_content);
+            let filename = format!("{}-{}.html", ch.dir_name, tale.file_name.replace(".md", ""));
+            let page_html = format!(
+                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title></head><body><h1>{}</h1>{}</body></html>",
+                tale.title, tale.title, html_body);
+            pages.push((filename.clone(), page_html));
+            toc.push_str(&format!("<li><a href=\"{}\">{}</a></li>\n", filename, tale.title));
+        }
+        toc.push_str("</ul>\n");
+    }
+    
+    let index_html = format!(
+        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title></head><body>{}</body></html>",
+        project.name, toc);
+    zip.start_file("index.html", options).map_err(|e| e.to_string())?;
+    zip.write_all(index_html.as_bytes()).map_err(|e| e.to_string())?;
+    for (path, content) in pages {
+        zip.start_file(path, options).map_err(|e| e.to_string())?;
+        zip.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    zip.finish().map(|_| ()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+
 
 pub fn export_manuscript_single(
     project: &Project,

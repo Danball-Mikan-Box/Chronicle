@@ -47,37 +47,45 @@ pub fn Toolbar(
         0
     };
 
-    let desktop = use_window();
-    let min_btn = desktop.clone();
-    let max_btn = desktop.clone();
-    let close_btn = desktop.clone();
-
-    rsx! {
-        div {
-            class: "titlebar",
-            onmousedown: move |_| { desktop.drag(); },
-            span { class: "titlebar-text", "Chronicle" }
-            div { class: "titlebar-controls",
-                button {
-                    class: "titlebar-btn",
-                    onmousedown: |e| e.stop_propagation(),
-                    onclick: move |_| { min_btn.set_minimized(true); },
-                    "\u{2014}"
-                }
-                button {
-                    class: "titlebar-btn",
-                    onmousedown: |e| e.stop_propagation(),
-                    onclick: move |_| { max_btn.toggle_maximized(); },
-                    "\u{25A1}"
-                }
-                button {
-                    class: "titlebar-btn titlebar-close",
-                    onmousedown: |e| e.stop_propagation(),
-                    onclick: move |_| { close_btn.close(); },
-                    "\u{2715}"
+    // Desktop title bar – only compiled for non‑Android targets
+    let titlebar = if cfg!(not(target_os = "android")) {
+        let desktop = use_window();
+        let min_btn = desktop.clone();
+        let max_btn = desktop.clone();
+        let close_btn = desktop.clone();
+        rsx! {
+            div {
+                class: "titlebar",
+                onmousedown: move |_| { desktop.drag(); },
+                span { class: "titlebar-text", "Chronicle" }
+                div { class: "titlebar-controls",
+                    button {
+                        class: "titlebar-btn",
+                        onmousedown: |e| e.stop_propagation(),
+                        onclick: move |_| { min_btn.set_minimized(true); },
+                        "\u{2014}"
+                    }
+                    button {
+                        class: "titlebar-btn",
+                        onmousedown: |e| e.stop_propagation(),
+                        onclick: move |_| { max_btn.toggle_maximized(); },
+                        "\u{25A1}"
+                    }
+                    button {
+                        class: "titlebar-btn titlebar-close",
+                        onmousedown: |e| e.stop_propagation(),
+                        onclick: move |_| { close_btn.close(); },
+                        "\u{2715}"
+                    }
                 }
             }
         }
+    } else {
+        rsx! {}
+    };
+
+    rsx! {
+        {titlebar}
         header {
             class: "toolbar",
             div { class: "toolbar-left",
@@ -87,92 +95,26 @@ pub fn Toolbar(
                 }
             }
             div { class: "toolbar-center",
-                button {
-                    class: "toolbar-btn",
-                    onclick: move |_| on_new_project.call(()),
-                    "新規"
-                }
-                button {
-                    class: "toolbar-btn",
-                    onclick: move |_| on_open_project.call(()),
-                    "開く"
-                }
-                button {
-                    class: "toolbar-btn",
-                    disabled: proj_name.is_empty(),
-                    onclick: move |_| on_save.call(()),
-                    "保存"
-                }
-                button {
-                    class: "toolbar-btn",
-                    onclick: move |_| on_settings.call(()),
-                    "設定"
-                }
+                button { class: "toolbar-btn", onclick: move |_| on_new_project.call(()), "新規" }
+                button { class: "toolbar-btn", onclick: move |_| on_open_project.call(()), "開く" }
+                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_save.call(()), "保存" }
+                button { class: "toolbar-btn", onclick: move |_| on_settings.call(()), "設定" }
                 span { class: "separator" }
-                button {
-                    class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn active" } else { "toolbar-btn" },
-                    disabled: proj_name.is_empty(),
-                    onclick: move |_| writing_mode.set(WritingMode::Vertical),
-                    "縦書"
-                }
-                button {
-                    class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn active" } else { "toolbar-btn" },
-                    disabled: proj_name.is_empty(),
-                    onclick: move |_| writing_mode.set(WritingMode::Horizontal),
-                    "横書"
-                }
+                button { class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn active" } else { "toolbar-btn" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Vertical), "縦書" }
+                button { class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn active" } else { "toolbar-btn" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Horizontal), "横書" }
                 span { class: "separator" }
-                button {
-                    class: "toolbar-btn",
-                    disabled: proj_name.is_empty(),
-                    onclick: move |_| on_export.call(()),
-                    "出力"
-                }
-                button {
-                    class: if is_dark { "toolbar-btn active" } else { "toolbar-btn" },
-                    onclick: move |_| on_toggle_dark.call(()),
-                    if is_dark { "\u{2601}" } else { "\u{2600}" }
-                }
+                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_export.call(()), "出力" }
+                button { class: if is_dark { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_dark.call(()), if is_dark { "\u{2601}" } else { "\u{2600}" } }
                 span { class: "separator" }
-                button {
-                    class: if show_sidebar { "toolbar-btn active" } else { "toolbar-btn" },
-                    onclick: move |_| on_toggle_sidebar.call(()),
-                    title: "サイドバー",
-                    "\u{2630}"
-                }
-                button {
-                    class: if show_editor { "toolbar-btn active" } else { "toolbar-btn" },
-                    onclick: move |_| on_toggle_editor.call(()),
-                    title: "エディタ",
-                    "E"
-                }
-                button {
-                    class: if show_preview { "toolbar-btn active" } else { "toolbar-btn" },
-                    onclick: move |_| on_toggle_preview.call(()),
-                    title: "プレビュー",
-                    "\u{1F441}"
-                }
-                button {
-                    class: if focus_mode { "toolbar-btn active" } else { "toolbar-btn" },
-                    onclick: move |_| on_toggle_focus_mode.call(()),
-                    title: "集中モード",
-                    "\u{26F6}"
-                }
+                button { class: if show_sidebar { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_sidebar.call(()), title: "サイドバー", "\u{2630}" }
+                button { class: if show_editor { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_editor.call(()), title: "エディタ", "E" }
+                button { class: if show_preview { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_preview.call(()), title: "プレビュー", "\u{1F441}" }
+                button { class: if focus_mode { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_focus_mode.call(()), title: "集中モード", "\u{26F6}" }
                 span { class: "separator" }
                 div { class: "font-size-controls",
-                    button {
-                        class: "toolbar-btn",
-                        onclick: move |_| on_decrease_font.call(()),
-                        title: "文字を小さく",
-                        "A-"
-                    }
+                    button { class: "toolbar-btn", onclick: move |_| on_decrease_font.call(()), title: "文字を小さく", "A-" }
                     span { class: "font-size-value", "{font_size}" }
-                    button {
-                        class: "toolbar-btn",
-                        onclick: move |_| on_increase_font.call(()),
-                        title: "文字を大きく",
-                        "A+"
-                    }
+                    button { class: "toolbar-btn", onclick: move |_| on_increase_font.call(()), title: "文字を大きく", "A+" }
                 }
             }
             div { class: "toolbar-right",
@@ -191,9 +133,11 @@ pub fn Toolbar(
                     }
                 }
                 div { class: "progress-bar-container",
-                    div { class: "progress-bar", style: "width: {progress}%;" }
+                    div { class: "progress-bar", style: "width: {progress}%" }
                 }
             }
         }
     }
 }
+
+

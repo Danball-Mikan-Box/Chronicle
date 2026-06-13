@@ -84,6 +84,7 @@ pub fn ExportDialog(
         (ExportFormat::ManuscriptZipHtml, "章・話ごとに分ける (ZIP/HTML)", "章ごとにフォルダを分け、各話をHTMLファイルとしてZIPにまとめます。"),
         (ExportFormat::CurrentFileTxt, "現在の編集中の話のみ (テキスト)", "現在開いている話のみをテキストファイルとして出力します。"),
         (ExportFormat::CurrentFileHtml, "現在の編集中の話のみ (HTML)", "現在開いている話のみをHTMLファイルとして出力します。"),
+        (ExportFormat::SiteZip, "サイト出力（ZIP）", "HTML サイト形式で出力し、index.html が含まれます。"),
     ];
 
     rsx! {
