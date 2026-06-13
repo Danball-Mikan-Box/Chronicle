@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::model::project::{PanelPosition, ProjectSettings, SidebarPosition, WritingMode};
+use crate::export::ExportFormat;
 
 #[derive(Debug, Clone)]
 pub enum PendingDelete {
@@ -54,6 +55,62 @@ pub fn ConfirmDialog(
                             on_confirm.call(());
                         },
                         "削除する"
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ExportDialog(
+    visible: Signal<bool>,
+    on_export: EventHandler<ExportFormat>,
+) -> Element {
+    if !*visible.read() {
+        return Ok(VNode::placeholder());
+    }
+
+    let close = move |_| visible.set(false);
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { visible.set(false); }
+    };
+
+    let formats = [
+        (ExportFormat::ProjectZip, "プロジェクト丸ごと (ZIP)", "プロジェクトの全ファイルをZIPに圧縮して出力します。バックアップに最適です。"),
+        (ExportFormat::ManuscriptSingleTxt, "全話を1つのファイルに (テキスト)", "全ての章と話を1つのテキストファイルにまとめて出力します。"),
+        (ExportFormat::ManuscriptSingleHtml, "全話を1つのファイルに (HTML)", "全ての章と話を1つのHTMLファイルにまとめて出力します。ブラウザで閲覧可能です。"),
+        (ExportFormat::ManuscriptZipTxt, "章・話ごとに分ける (ZIP/テキスト)", "章ごとにフォルダを分け、各話をテキストファイルとしてZIPにまとめます。"),
+        (ExportFormat::ManuscriptZipHtml, "章・話ごとに分ける (ZIP/HTML)", "章ごとにフォルダを分け、各話をHTMLファイルとしてZIPにまとめます。"),
+        (ExportFormat::CurrentFileTxt, "現在の編集中の話のみ (テキスト)", "現在開いている話のみをテキストファイルとして出力します。"),
+        (ExportFormat::CurrentFileHtml, "現在の編集中の話のみ (HTML)", "現在開いている話のみをHTMLファイルとして出力します。"),
+    ];
+
+    rsx! {
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog dialog-wide", onclick: |e| e.stop_propagation(),
+                h2 { "エクスポート" }
+                div { class: "dialog-body",
+                    p { class: "dialog-description", "出力形式を選択してください。" }
+                    div { class: "export-format-list",
+                        for (fmt, title, desc) in formats {
+                            div {
+                                class: "export-format-item",
+                                onclick: move |_| {
+                                    on_export.call(fmt.clone());
+                                    visible.set(false);
+                                },
+                                h3 { "{title}" }
+                                p { "{desc}" }
+                            }
+                        }
+                    }
+                }
+                div { class: "dialog-actions",
+                    button {
+                        class: "dialog-btn",
+                        onclick: close,
+                        "キャンセル"
                     }
                 }
             }

@@ -97,28 +97,33 @@ pub fn Toolbar(
                 }
                 button {
                     class: "toolbar-btn",
+                    disabled: proj_name.is_empty(),
                     onclick: move |_| on_save.call(()),
                     "保存"
                 }
                 button {
                     class: "toolbar-btn",
+                    disabled: proj_name.is_empty(),
                     onclick: move |_| on_settings.call(()),
                     "設定"
                 }
                 span { class: "separator" }
                 button {
                     class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn active" } else { "toolbar-btn" },
+                    disabled: proj_name.is_empty(),
                     onclick: move |_| writing_mode.set(WritingMode::Vertical),
                     "縦書"
                 }
                 button {
                     class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn active" } else { "toolbar-btn" },
+                    disabled: proj_name.is_empty(),
                     onclick: move |_| writing_mode.set(WritingMode::Horizontal),
                     "横書"
                 }
                 span { class: "separator" }
                 button {
                     class: "toolbar-btn",
+                    disabled: proj_name.is_empty(),
                     onclick: move |_| on_export.call(()),
                     "出力"
                 }

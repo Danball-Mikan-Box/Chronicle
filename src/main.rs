@@ -3,6 +3,7 @@
 
 mod app;
 mod components;
+mod export;
 mod fs;
 mod markdown;
 mod model;

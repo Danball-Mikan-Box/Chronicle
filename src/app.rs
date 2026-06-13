@@ -2,8 +2,9 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 use std::collections::HashMap;
 
-use crate::components::dialog::{ConfirmDialog, PendingDelete, ProjectDialog, RenameDialog, SettingsDialog};
+use crate::components::dialog::{ConfirmDialog, ExportDialog, PendingDelete, ProjectDialog, RenameDialog, SettingsDialog};
 use crate::components::editor::Editor;
+use crate::export::ExportFormat;
 use crate::components::preview::Preview;
 use crate::components::sidebar::Sidebar;
 use crate::components::status_bar::StatusBar;
@@ -71,6 +72,7 @@ pub fn App() -> Element {
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
     let mut rename_dialog_visible = use_signal(|| false);
+    let mut export_dialog_visible = use_signal(|| false);
     let mut rename_target = use_signal(|| (String::new(), String::new()));
     let mut save_notification = use_signal(|| Option::<String>::None);
     let mut is_saved = use_signal(|| true);
@@ -370,59 +372,75 @@ pub fn App() -> Element {
         }
     };
 
-    let mut do_export = {
-        let project = project.clone();
-        let active_tab = active_tab.clone();
-        let tab_content = tab_content.clone();
-        let mut save_notification = save_notification.clone();
-        move || {
-            let doc = active_tab.read().clone();
-            if let Some(d) = doc {
-                let proj = project.read().clone();
-                if let Some(ref proj) = proj {
-                    if let Some(text) = tab_content.read().get(&d) {
-                        let default_name = match &d {
-                            DocRef::Tale { tale_file, .. } => tale_file.replace(".md", ".txt"),
-                            DocRef::Material { file_name, .. } => file_name.replace(".md", ".txt"),
-                        };
-                        let dir = rfd::FileDialog::new()
-                            .set_title("保存先を選択")
-                            .set_file_name(&default_name)
-                            .save_file();
-                        if let Some(path) = dir {
-                            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
-                            let output = if ext == "html" {
-                                let html = crate::markdown::renderer::render_to_html(text);
-                                format!(
-                                    "<!DOCTYPE html><html lang=ja><meta charset=utf-8><title>{}</title><body>{}</body></html>",
-                                    default_name.replace(".txt", ""),
-                                    html
-                                )
+    let on_export = move |_| {
+        export_dialog_visible.set(true);
+    };
+
+    let on_export_confirm = move |format: ExportFormat| {
+        let proj = project.read().clone();
+        if let Some(ref proj) = proj {
+            let default_name = match format {
+                ExportFormat::ProjectZip => format!("{}_flaxia.zip", proj.name),
+                ExportFormat::ManuscriptSingleTxt => "全話.txt".to_string(),
+                ExportFormat::ManuscriptSingleHtml => "全話.html".to_string(),
+                ExportFormat::ManuscriptZipTxt => "原稿_テキスト.zip".to_string(),
+                ExportFormat::ManuscriptZipHtml => "原稿_HTML.zip".to_string(),
+                ExportFormat::CurrentFileTxt => {
+                    active_tab.read().as_ref()
+                        .map(|d| d.short_label().replace(".md", ".txt"))
+                        .unwrap_or_else(|| "出力.txt".to_string())
+                }
+                ExportFormat::CurrentFileHtml => {
+                    active_tab.read().as_ref()
+                        .map(|d| d.short_label().replace(".md", ".html"))
+                        .unwrap_or_else(|| "出力.html".to_string())
+                }
+            };
+
+            let mut dialog = rfd::FileDialog::new()
+                .set_title("エクスポート先を選択")
+                .set_file_name(&default_name);
+            
+            let path = match format {
+                ExportFormat::ProjectZip | ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml => {
+                    dialog.add_filter("ZIP Archive", &["zip"]).save_file()
+                }
+                ExportFormat::ManuscriptSingleTxt | ExportFormat::CurrentFileTxt => {
+                    dialog.add_filter("Text File", &["txt", "md"]).save_file()
+                }
+                ExportFormat::ManuscriptSingleHtml | ExportFormat::CurrentFileHtml => {
+                    dialog.add_filter("HTML File", &["html"]).save_file()
+                }
+            };
+
+            if let Some(path) = path {
+                let res = match format {
+                    ExportFormat::ProjectZip => crate::export::export_project_zip(proj, &path),
+                    ExportFormat::ManuscriptSingleTxt | ExportFormat::ManuscriptSingleHtml => {
+                        crate::export::export_manuscript_single(proj, format, &path)
+                    }
+                    ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml => {
+                        crate::export::export_manuscript_zip(proj, format, &path)
+                    }
+                    ExportFormat::CurrentFileTxt | ExportFormat::CurrentFileHtml => {
+                        if let Some(doc) = active_tab.read().as_ref() {
+                            if let Some(text) = tab_content.read().get(doc) {
+                                crate::export::export_current_file(proj, format, doc, text, &path)
                             } else {
-                                text.clone()
-                            };
-                            let _ = std::fs::write(&path, &output);
-                            *save_notification.write() = Some(format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
+                                Err("ドキュメントの内容が読み込めません".to_string())
+                            }
+                        } else {
+                            Err("開いている話がありません".to_string())
                         }
                     }
-                }
-            } else {
-                let proj = project.read().clone();
-                if let Some(ref proj) = proj {
-                    // No active doc — export all chapters as single file
-                    let txt = proj.chapters.iter().flat_map(|ch| {
-                        ch.tales.iter().filter_map(|t| {
-                            fs::chapter::load_tale(proj, &ch.dir_name, &t.file_name).ok()
-                                .map(|c| format!("# {} / {}\n\n{}\n\n", ch.title, t.title, c))
-                        }).collect::<Vec<_>>()
-                    }).collect::<Vec<_>>().join("---\n\n");
-                    let dir = rfd::FileDialog::new()
-                        .set_title("保存先を選択")
-                        .set_file_name("全話.txt")
-                        .save_file();
-                    if let Some(path) = dir {
-                        let _ = std::fs::write(&path, &txt);
-                        *save_notification.write() = Some("全話を出力しました".to_string());
+                };
+
+                match res {
+                    Ok(_) => {
+                        *save_notification.write() = Some(format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
+                    }
+                    Err(e) => {
+                        *save_notification.write() = Some(format!("エクスポートエラー: {}", e));
                     }
                 }
             }
@@ -481,10 +499,6 @@ pub fn App() -> Element {
 
     let on_save = move |_| {
         do_save_current();
-    };
-
-    let on_export = move |_| {
-        do_export();
     };
 
     let desktop_apply_visibility = desktop.clone();
@@ -1211,6 +1225,10 @@ pub fn App() -> Element {
                 auto_save_enabled: auto_save_enabled,
                 font_size: font_size,
                 on_save: on_confirm_settings,
+            }
+            ExportDialog {
+                visible: export_dialog_visible,
+                on_export: on_export_confirm,
             }
             ConfirmDialog {
                 pending: pending_delete,
