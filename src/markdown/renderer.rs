@@ -3,10 +3,10 @@ use super::parser;
 pub fn render_to_html(markdown: &str) -> String {
     let preprocessed = preprocess(markdown);
     let html = parser::parse_markdown(&preprocessed);
-    wrap_alphanumeric(&html)
+    wrap_punctuation(&html)
 }
 
-fn wrap_alphanumeric(html: &str) -> String {
+fn wrap_punctuation(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut text_buf = String::new();
     let mut in_tag = false;
@@ -36,36 +36,22 @@ fn wrap_alphanumeric(html: &str) -> String {
 }
 
 fn push_processed_text(result: &mut String, text: &str) {
-    let mut alnum = String::new();
-    let mut chars = text.char_indices().peekable();
-    while let Some((_, c)) = chars.next() {
-        if c == '&' {
-            flush_alnum(result, &mut alnum);
-            let mut entity = String::from('&');
-            while let Some(&(_, next)) = chars.peek() {
-                entity.push(next);
-                chars.next();
-                if next == ';' {
-                    break;
-                }
+    let mut buf = String::new();
+    for c in text.chars() {
+        if c == '、' || c == '。' {
+            if !buf.is_empty() {
+                result.push_str(&buf);
+                buf.clear();
             }
-            result.push_str(&entity);
-        } else if c.is_ascii_alphanumeric() {
-            alnum.push(c);
-        } else {
-            flush_alnum(result, &mut alnum);
+            result.push_str("<span class=\"punct\">");
             result.push(c);
+            result.push_str("</span>");
+        } else {
+            buf.push(c);
         }
     }
-    flush_alnum(result, &mut alnum);
-}
-
-fn flush_alnum(result: &mut String, alnum: &mut String) {
-    if !alnum.is_empty() {
-        result.push_str("<span class=\"upright\">");
-        result.push_str(alnum);
-        result.push_str("</span>");
-        alnum.clear();
+    if !buf.is_empty() {
+        result.push_str(&buf);
     }
 }
 
@@ -217,55 +203,49 @@ mod tests {
     }
 
     #[test]
-    fn test_wrap_alphanumeric_simple() {
-        assert_eq!(wrap_alphanumeric("<p>ABC</p>"), "<p><span class=\"upright\">ABC</span></p>");
-    }
-
-    #[test]
-    fn test_wrap_alphanumeric_mixed() {
+    fn test_wrap_punct_simple() {
         assert_eq!(
-            wrap_alphanumeric("<p>これはABCです</p>"),
-            "<p>これは<span class=\"upright\">ABC</span>です</p>"
+            wrap_punctuation("<p>あいうえお。</p>"),
+            "<p>あいうえお<span class=\"punct\">。</span></p>"
         );
     }
 
     #[test]
-    fn test_wrap_alphanumeric_in_tag() {
+    fn test_wrap_punct_commma() {
         assert_eq!(
-            wrap_alphanumeric("<p>これは<div class=\"test\">ABC</div>です</p>"),
-            "<p>これは<div class=\"test\"><span class=\"upright\">ABC</span></div>です</p>"
+            wrap_punctuation("<p>あ、いうえお。</p>"),
+            "<p>あ<span class=\"punct\">、</span>いうえお<span class=\"punct\">。</span></p>"
         );
     }
 
     #[test]
-    fn test_wrap_alphanumeric_numbers() {
+    fn test_wrap_punct_inside_tag() {
         assert_eq!(
-            wrap_alphanumeric("<p>42です</p>"),
-            "<p><span class=\"upright\">42</span>です</p>"
+            wrap_punctuation("<p>これは<div>テスト。</div>です。</p>"),
+            "<p>これは<div>テスト<span class=\"punct\">。</span></div>です<span class=\"punct\">。</span></p>"
         );
     }
 
     #[test]
-    fn test_wrap_alphanumeric_single() {
+    fn test_wrap_punct_entity_skipped() {
         assert_eq!(
-            wrap_alphanumeric("<p>Aです</p>"),
-            "<p><span class=\"upright\">A</span>です</p>"
+            wrap_punctuation("<p>あ&amp;いう。</p>"),
+            "<p>あ&amp;いう<span class=\"punct\">。</span></p>"
         );
     }
 
     #[test]
     fn test_full_pipeline() {
-        let md = "これはABCの42章です。";
+        let md = "これはテストです。";
         let out = render_to_html(md);
-        assert!(out.contains("<span class=\"upright\">ABC</span>"));
-        assert!(out.contains("<span class=\"upright\">42</span>"));
+        assert!(out.contains("<span class=\"punct\">。</span>"));
     }
 
     #[test]
-    fn test_wrap_entity_skipped() {
-        assert_eq!(
-            wrap_alphanumeric("<p>A&amp;B</p>"),
-            "<p><span class=\"upright\">A</span>&amp;<span class=\"upright\">B</span></p>"
-        );
+    fn test_alphanumeric_not_wrapped() {
+        let md = "ABC123";
+        let out = render_to_html(md);
+        assert!(!out.contains("upright"));
+        assert!(!out.contains("punct"));
     }
 }

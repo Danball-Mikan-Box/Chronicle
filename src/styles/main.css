@@ -535,7 +535,7 @@ input, textarea, button {
 
 .preview.vertical {
     writing-mode: vertical-rl;
-    text-orientation: mixed;
+    text-orientation: upright;
     line-height: 2.4;
     letter-spacing: 0.25em;
     height: 100%;
@@ -553,8 +553,8 @@ input, textarea, button {
     max-inline-size: 100%;
 }
 
-.preview.vertical .upright {
-    text-orientation: upright;
+.preview.vertical .punct {
+    text-orientation: mixed;
 }
 
 .preview h1 {
