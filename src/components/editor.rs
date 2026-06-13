@@ -94,8 +94,6 @@ pub fn Editor(
         let _ = desktop_sync.webview.evaluate_script(&js);
     }));
 
-    let prev_val = use_signal(|| String::new());
-
     let do_format: Rc<dyn Fn(FormatKind)> = {
         let content = content.clone();
         let composing_fmt = is_composing.clone();
@@ -176,7 +174,6 @@ pub fn Editor(
         let do_format = do_format.clone();
         let desktop_ed = desktop.clone();
         let content_kd = content.clone();
-        let prev_val_kd = prev_val.clone();
         move |evt: Event<KeyboardData>| {
             if evt.is_composing() { return; }
             match evt.key() {
@@ -193,17 +190,23 @@ pub fn Editor(
                     }
                 }
                 Key::Enter => {
-                    evt.prevent_default();
-                    let js = r#"
-                        const ta = document.querySelector('.editor');
-                        if (ta && ta.value.endsWith('\u300d')) {
-                            const pos = ta.selectionStart;
-                            ta.value = ta.value.substring(0, pos) + '\n\n' + ta.value.substring(pos);
-                            ta.selectionStart = ta.selectionEnd = pos + 2;
-                            ta.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                    "#;
-                    let _ = desktop_ed.webview.evaluate_script(js);
+                    let mut spawn_kd = content_kd.clone();
+                    if spawn_kd.read().ends_with('\u{300d}') {
+                        evt.prevent_default();
+                        spawn(async move {
+                            let js = r#"
+                                const ta = document.querySelector('.editor');
+                                const pos = ta.selectionStart;
+                                ta.value = ta.value.substring(0, pos) + '\n\n' + ta.value.substring(pos);
+                                ta.selectionStart = ta.selectionEnd = pos + 2;
+                                dioxus.send(ta.value);
+                            "#;
+                            let mut e = eval(js);
+                            if let Ok(new_val) = e.recv().await {
+                                spawn_kd.set(new_val);
+                            }
+                        });
+                    }
                 }
                 _ => {}
             }

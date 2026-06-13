@@ -234,6 +234,21 @@ mod tests {
     }
 
     #[test]
+    fn test_hrule_from_dashes() {
+        let md = "text\n---\ntext";
+        let out = render_to_html(md);
+        assert!(out.contains("<hr"));
+        assert!(!out.contains("---"));
+    }
+
+    #[test]
+    fn test_no_hrule_from_blank_lines() {
+        let md = "text\n\n\ntext";
+        let out = render_to_html(md);
+        assert!(!out.contains("<hr"));
+    }
+
+    #[test]
     fn test_alphanumeric_not_wrapped() {
         let md = "ABC123";
         let out = render_to_html(md);
