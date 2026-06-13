@@ -87,7 +87,7 @@ pub fn export_site_zip(project: &Project, output_path: &Path) -> Result<(), Stri
             let html_body = crate::markdown::renderer::render_to_html(&tale_content);
             let filename = format!("{}-{}.html", ch.dir_name, tale.file_name.replace(".md", ""));
             let page_html = format!(
-                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title></head><body><h1>{}</h1>{}</body></html>",
+                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{font-family:sans-serif;max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;}}h1{{margin-top:0;}}a{{color:#0066cc;text-decoration:none;}}a:hover{{text-decoration:underline;}}ul{{list-style:none;padding:0;}}li{{margin:0.5em 0;}}</style></head><body><h1>{}</h1>{}</body></html>",
                 tale.title, tale.title, html_body);
             pages.push((filename.clone(), page_html));
             toc.push_str(&format!("<li><a href=\"{}\">{}</a></li>\n", filename, tale.title));
@@ -96,7 +96,7 @@ pub fn export_site_zip(project: &Project, output_path: &Path) -> Result<(), Stri
     }
     
     let index_html = format!(
-        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title></head><body>{}</body></html>",
+        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{font-family:sans-serif;max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;}}h1{{margin-top:0;}}a{{color:#0066cc;text-decoration:none;}}a:hover{{text-decoration:underline;}}ul{{list-style:none;padding:0;}}li{{margin:0.5em 0;}}</style></head><body>{}</body></html>",
         project.name, toc);
     zip.start_file("index.html", options).map_err(|e| e.to_string())?;
     zip.write_all(index_html.as_bytes()).map_err(|e| e.to_string())?;
