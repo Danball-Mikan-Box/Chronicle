@@ -80,18 +80,10 @@ fn preprocess(input: &str) -> String {
         }
 
         if c == '\n' {
-            let mut nl_count = 1;
             while let Some(&(_, '\n')) = chars.peek() {
-                nl_count += 1;
                 chars.next();
             }
-            if nl_count == 1 {
-                result.push_str("\n\n");
-            } else if nl_count >= 3 {
-                result.push_str("\n\n---\n\n");
-            } else {
-                result.push_str("\n\n");
-            }
+            result.push_str("\n\n");
             continue;
         }
 
@@ -183,17 +175,17 @@ mod tests {
     }
 
     #[test]
-    fn test_triple_newline_to_scene_break() {
+    fn test_triple_newline_to_paragraph() {
         let md = "あいうえお\n\n\nかきくけこ";
         let out = preprocess(md);
-        assert_eq!(out, "あいうえお\n\n---\n\nかきくけこ");
+        assert_eq!(out, "あいうえお\n\nかきくけこ");
     }
 
     #[test]
-    fn test_quadruple_newline_to_scene_break() {
+    fn test_quadruple_newline_to_paragraph() {
         let md = "あいうえお\n\n\n\nかきくけこ";
         let out = preprocess(md);
-        assert_eq!(out, "あいうえお\n\n---\n\nかきくけこ");
+        assert_eq!(out, "あいうえお\n\nかきくけこ");
     }
 
     #[test]

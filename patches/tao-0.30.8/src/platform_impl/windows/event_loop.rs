@@ -55,7 +55,6 @@ use crate::{
     dpi::{become_dpi_aware, dpi_to_scale_factor, enable_non_client_dpi_scaling},
     keyboard::is_msg_keyboard_related,
     keyboard_layout::LAYOUT_CACHE,
-    minimal_ime::is_msg_ime_related,
     monitor::{self, MonitorHandle},
     raw_input, util,
     window::set_skip_taskbar,
@@ -1009,29 +1008,8 @@ unsafe fn public_window_callback_inner<T: 'static>(
     .catch_unwind(keyboard_callback)
     .unwrap_or_else(|| result = ProcResult::Value(LRESULT(-1)));
 
-  let ime_callback = || {
-    use crate::event::WindowEvent::ReceivedImeText;
-    let is_ime_related = is_msg_ime_related(msg);
-    if !is_ime_related {
-      return;
-    }
-    let text = {
-      let mut window_state = subclass_input.window_state.lock();
-      window_state
-        .ime_handler
-        .process_message(window, msg, wparam, lparam, &mut result)
-    };
-    if let Some(str) = text {
-      subclass_input.send_event(Event::WindowEvent {
-        window_id: RootWindowId(WindowId(window.0 as _)),
-        event: ReceivedImeText(str),
-      });
-    }
-  };
-  subclass_input
-    .event_loop_runner
-    .catch_unwind(ime_callback)
-    .unwrap_or_else(|| result = ProcResult::Value(LRESULT(-1)));
+  // IME is handled natively by WebView2 — do not intercept IME messages.
+  // Kept as a no-op to preserve the callback structure.
 
   // I decided to bind the closure to `callback` and pass it to catch_unwind rather than passing
   // the closure to catch_unwind directly so that the match body indendation wouldn't change and
