@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
 use crate::components::formatting_bar::{FormatKind, FormattingBar};
+use crate::model::project::Project;
 
 #[derive(Deserialize, Default)]
 struct TextParts {
@@ -74,13 +75,32 @@ fn apply_format(sel: &str, kind: FormatKind) -> (String, usize, usize) {
 #[component]
 pub fn Editor(
     content: Signal<String>,
+    project: Signal<Option<Project>>,
+    global_settings: Signal<crate::model::project::GlobalSettings>,
     is_saved: Signal<bool>,
     on_save: EventHandler<()>,
-    font_size: u32,
+    focus_mode: Signal<bool>,
     placeholder: String,
 ) -> Element {
     let desktop = use_window();
     let mut is_composing = use_signal(|| false);
+
+    let settings = project.read().as_ref().map(|p| p.settings.clone()).unwrap_or_default();
+    let gs = global_settings.read();
+    
+    let style = format!(
+        "font-family: '{}'; font-size: {}px; line-height: {}; max-width: {}px; margin: 0 auto;",
+        gs.font_family,
+        gs.font_size,
+        gs.line_height,
+        gs.max_width
+    );
+
+    let editor_class = if settings.indent_paragraphs {
+        "editor indent-paragraphs"
+    } else {
+        "editor"
+    };
 
     let do_format: Rc<dyn Fn(FormatKind)> = {
         let content = content.clone();
@@ -225,16 +245,18 @@ pub fn Editor(
 
     rsx! {
         div { class: "editor-wrapper",
-            FormattingBar { on_format: on_format }
+            if !*focus_mode.read() {
+                FormattingBar { on_format: on_format }
+            }
             textarea {
-                class: "editor",
+                class: "{editor_class}",
                 value: "{content}",
                 oninput: on_input,
                 onkeydown: on_keydown,
                 oncompositionstart: on_compositionstart,
                 oncompositionend: on_compositionend,
                 placeholder: "{placeholder}",
-                style: "font-size: {font_size}px;",
+                style: "{style}",
             }
         }
     }

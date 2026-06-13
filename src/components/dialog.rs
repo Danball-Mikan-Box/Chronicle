@@ -260,16 +260,16 @@ pub fn SettingsDialog(
     visible: Signal<bool>,
     project_name: Signal<String>,
     project_settings: Signal<ProjectSettings>,
-    is_dark: Signal<bool>,
-    auto_save_enabled: Signal<bool>,
-    font_size: Signal<u32>,
-    on_save: EventHandler<(String, ProjectSettings)>,
+    global_settings: Signal<crate::model::project::GlobalSettings>,
+    project_is_open: bool,
+    on_save: EventHandler<(String, ProjectSettings, crate::model::project::GlobalSettings)>,
 ) -> Element {
     if !*visible.read() {
         return Ok(VNode::placeholder());
     }
 
     let settings = project_settings.read().clone();
+    let g_settings = global_settings.read().clone();
     let mut name = use_signal(|| project_name.read().clone());
     let mut author = use_signal(|| settings.author.clone());
     let mut description = use_signal(|| settings.description.clone());
@@ -277,9 +277,14 @@ pub fn SettingsDialog(
     let mut writing_mode = use_signal(|| settings.writing_mode);
     let mut preview_position = use_signal(|| settings.preview_position);
     let mut sidebar_position = use_signal(|| settings.sidebar_position);
-    let mut dark = use_signal(|| *is_dark.read());
-    let mut auto_save = use_signal(|| *auto_save_enabled.read());
-    let mut fs = use_signal(|| *font_size.read());
+    let mut editor_indent = use_signal(|| settings.indent_paragraphs);
+
+    let mut dark = use_signal(|| g_settings.theme_dark);
+    let mut auto_save = use_signal(|| g_settings.auto_save);
+    let mut fs = use_signal(|| g_settings.font_size);
+    let mut editor_font = use_signal(|| g_settings.font_family.clone());
+    let mut editor_lh = use_signal(|| g_settings.line_height.to_string());
+    let mut editor_mw = use_signal(|| g_settings.max_width.to_string());
 
     let close = move |_| visible.set(false);
     let on_keydown = move |e: Event<KeyboardData>| {
@@ -289,91 +294,88 @@ pub fn SettingsDialog(
     rsx! {
         div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
             div { class: "dialog dialog-wide", onclick: |e| e.stop_propagation(),
-                h2 { "プロジェクト設定" }
+                h2 { "設定" }
                 div { class: "dialog-body",
-                    label { "作品名" }
-                    input {
+                    if project_is_open {
+                        h3 { class: "dialog-section-title", "作品情報" }
+                        label { "作品名" }
+                        input {
+                            class: "dialog-input",
+                            value: "{name}",
+                            oninput: move |e| name.set(e.value()),
+                        }
+                        label { "作者名" }
+                        input {
+                            class: "dialog-input",
+                            value: "{author}",
+                            oninput: move |e| author.set(e.value()),
+                        }
+                        label { "説明" }
+                        textarea {
+                            class: "dialog-input dialog-textarea",
+                            value: "{description}",
+                            oninput: move |e| description.set(e.value()),
+                        }
+
+                        h3 { class: "dialog-section-title", "執筆目標" }
+                        label { "1日の目標文字数" }
+                        input {
+                            class: "dialog-input",
+                            value: "{daily_goal}",
+                            oninput: move |e| daily_goal.set(e.value()),
+                        }
+                    }
+
+                    h3 { class: "dialog-section-title", "エディタ・プレビュー設定 (アプリ共通)" }
+                    label { "フォント" }
+                    select {
                         class: "dialog-input",
-                        value: "{name}",
-                        oninput: move |e| name.set(e.value()),
+                        value: "{editor_font}",
+                        onchange: move |e| editor_font.set(e.value()),
+                        option { value: "Noto Serif JP", "Noto Serif JP (明朝)" }
+                        option { value: "Noto Sans JP", "Noto Sans JP (ゴシック)" }
+                        option { value: "Yu Mincho", "游明朝" }
+                        option { value: "Yu Gothic", "游ゴシック" }
+                        option { value: "monospace", "等幅フォント" }
                     }
-                    label { "作者名" }
-                    input {
-                        class: "dialog-input",
-                        value: "{author}",
-                        oninput: move |e| author.set(e.value()),
-                    }
-                    label { "説明" }
-                    textarea {
-                        class: "dialog-input dialog-textarea",
-                        value: "{description}",
-                        oninput: move |e| description.set(e.value()),
-                    }
-                    label { "1日の目標文字数" }
-                    input {
-                        class: "dialog-input",
-                        value: "{daily_goal}",
-                        oninput: move |e| daily_goal.set(e.value()),
-                    }
-                    label { "書字方向" }
-                    div { class: "dialog-radio-group",
-                        button {
-                            class: if *writing_mode.read() == WritingMode::Vertical { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| writing_mode.set(WritingMode::Vertical),
-                            "縦書き"
-                        }
-                        button {
-                            class: if *writing_mode.read() == WritingMode::Horizontal { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| writing_mode.set(WritingMode::Horizontal),
-                            "横書き"
-                        }
-                    }
-                    label { "プレビュー位置" }
-                    div { class: "dialog-radio-group",
-                        button {
-                            class: if *preview_position.read() == PanelPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| preview_position.set(PanelPosition::Right),
-                            "右"
-                        }
-                        button {
-                            class: if *preview_position.read() == PanelPosition::Bottom { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| preview_position.set(PanelPosition::Bottom),
-                            "下"
-                        }
-                    }
-                    label { "サイドバー位置" }
-                    div { class: "dialog-radio-group",
-                        button {
-                            class: if *sidebar_position.read() == SidebarPosition::Left { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| sidebar_position.set(SidebarPosition::Left),
-                            "左"
-                        }
-                        button {
-                            class: if *sidebar_position.read() == SidebarPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
-                            onclick: move |_| sidebar_position.set(SidebarPosition::Right),
-                            "右"
-                        }
-                    }
-                    label { "表示設定" }
-                    div { class: "dialog-checkbox-group",
-                        label { class: "dialog-checkbox",
+                    
+                    div { class: "dialog-row",
+                        div { class: "dialog-col",
+                            label { "行の高さ (倍率)" }
                             input {
-                                r#type: "checkbox",
-                                checked: *dark.read(),
-                                onchange: move |_| { let v = !*dark.read(); dark.set(v); },
+                                class: "dialog-input",
+                                r#type: "number",
+                                step: "0.1",
+                                min: "1.0",
+                                max: "4.0",
+                                value: "{editor_lh}",
+                                oninput: move |e| editor_lh.set(e.value()),
                             }
-                            "ダークモード"
                         }
-                        label { class: "dialog-checkbox",
+                        div { class: "dialog-col",
+                            label { "最大幅 (px)" }
                             input {
-                                r#type: "checkbox",
-                                checked: *auto_save.read(),
-                                onchange: move |_| { let v = !*auto_save.read(); auto_save.set(v); },
+                                class: "dialog-input",
+                                r#type: "number",
+                                step: "50",
+                                min: "400",
+                                max: "2000",
+                                value: "{editor_mw}",
+                                oninput: move |e| editor_mw.set(e.value()),
                             }
-                            "自動保存"
                         }
                     }
-                    label { "フォントサイズ: {fs}" }
+
+                    label { class: "dialog-checkbox",
+                        input {
+                            r#type: "checkbox",
+                            checked: *editor_indent.read(),
+                            onchange: move |_| { let v = !*editor_indent.read(); editor_indent.set(v); },
+                        }
+                        "段落の先頭を字下げする"
+                    }
+
+                    label { "フォントサイズ: {fs}px" }
                     input {
                         r#type: "range",
                         min: "8",
@@ -385,6 +387,81 @@ pub fn SettingsDialog(
                             }
                         },
                     }
+
+                    h3 { class: "dialog-section-title", "レイアウト・表示" }
+                    div { class: "dialog-row",
+                        if project_is_open {
+                            div { class: "dialog-col",
+                                label { "書字方向 (作品固有)" }
+                                div { class: "dialog-radio-group",
+                                    button {
+                                        class: if *writing_mode.read() == WritingMode::Vertical { "dialog-btn primary" } else { "dialog-btn" },
+                                        onclick: move |_| writing_mode.set(WritingMode::Vertical),
+                                        "縦書き"
+                                    }
+                                    button {
+                                        class: if *writing_mode.read() == WritingMode::Horizontal { "dialog-btn primary" } else { "dialog-btn" },
+                                        onclick: move |_| writing_mode.set(WritingMode::Horizontal),
+                                        "横書き"
+                                    }
+                                }
+                            }
+                        }
+                        div { class: "dialog-col",
+                            label { "プレビュー位置" }
+                            div { class: "dialog-radio-group",
+                                button {
+                                    class: if *preview_position.read() == PanelPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
+                                    onclick: move |_| preview_position.set(PanelPosition::Right),
+                                    "右"
+                                }
+                                button {
+                                    class: if *preview_position.read() == PanelPosition::Bottom { "dialog-btn primary" } else { "dialog-btn" },
+                                    onclick: move |_| preview_position.set(PanelPosition::Bottom),
+                                    "下"
+                                }
+                            }
+                        }
+                    }
+
+                    div { class: "dialog-row",
+                        div { class: "dialog-col",
+                            label { "サイドバー位置" }
+                            div { class: "dialog-radio-group",
+                                button {
+                                    class: if *sidebar_position.read() == SidebarPosition::Left { "dialog-btn primary" } else { "dialog-btn" },
+                                    onclick: move |_| sidebar_position.set(SidebarPosition::Left),
+                                    "左"
+                                }
+                                button {
+                                    class: if *sidebar_position.read() == SidebarPosition::Right { "dialog-btn primary" } else { "dialog-btn" },
+                                    onclick: move |_| sidebar_position.set(SidebarPosition::Right),
+                                    "右"
+                                }
+                            }
+                        }
+                        div { class: "dialog-col",
+                            label { "共通設定" }
+                            div { class: "dialog-checkbox-group-stack",
+                                label { class: "dialog-checkbox",
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: *dark.read(),
+                                        onchange: move |_| { let v = !*dark.read(); dark.set(v); },
+                                    }
+                                    "ダークモード"
+                                }
+                                label { class: "dialog-checkbox",
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: *auto_save.read(),
+                                        onchange: move |_| { let v = !*auto_save.read(); auto_save.set(v); },
+                                    }
+                                    "自動保存"
+                                }
+                            }
+                        }
+                    }
                 }
                 div { class: "dialog-actions",
                     button {
@@ -394,11 +471,13 @@ pub fn SettingsDialog(
                     }
                     button {
                         class: "dialog-btn primary",
-                        disabled: name.read().is_empty(),
+                        disabled: project_is_open && name.read().is_empty(),
                         onclick: move |_| {
                             let n = name.read().clone();
-                            if n.is_empty() { return; }
                             let goal = daily_goal.read().parse::<usize>().unwrap_or(1000);
+                            let lh = editor_lh.read().parse::<f32>().unwrap_or(2.0);
+                            let mw = editor_mw.read().parse::<u32>().unwrap_or(800);
+                            
                             let settings = ProjectSettings {
                                 author: author.read().clone(),
                                 description: description.read().clone(),
@@ -406,11 +485,19 @@ pub fn SettingsDialog(
                                 writing_mode: *writing_mode.read(),
                                 preview_position: *preview_position.read(),
                                 sidebar_position: *sidebar_position.read(),
+                                indent_paragraphs: *editor_indent.read(),
                             };
-                            is_dark.set(*dark.read());
-                            auto_save_enabled.set(*auto_save.read());
-                            font_size.set(*fs.read());
-                            on_save.call((n, settings));
+
+                            let g_settings = crate::model::project::GlobalSettings {
+                                theme_dark: *dark.read(),
+                                font_size: *fs.read(),
+                                auto_save: *auto_save.read(),
+                                font_family: editor_font.read().clone(),
+                                line_height: lh,
+                                max_width: mw,
+                            };
+
+                            on_save.call((n, settings, g_settings));
                             visible.set(false);
                         },
                         "保存"

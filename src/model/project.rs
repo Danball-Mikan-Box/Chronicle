@@ -2,6 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DailyStats {
+    pub last_date: String,
+    pub start_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub name: String,
@@ -10,6 +16,8 @@ pub struct Project {
     #[serde(default)]
     pub materials: Vec<MaterialEntry>,
     pub settings: ProjectSettings,
+    #[serde(default)]
+    pub daily_stats: DailyStats,
 }
 
 impl Project {
@@ -20,6 +28,7 @@ impl Project {
             chapters: Vec::new(),
             materials: Vec::new(),
             settings: ProjectSettings::default(),
+            daily_stats: DailyStats::default(),
         }
     }
 
@@ -227,6 +236,31 @@ pub struct ProjectSettings {
     pub preview_position: PanelPosition,
     #[serde(default)]
     pub sidebar_position: SidebarPosition,
+    #[serde(default)]
+    pub indent_paragraphs: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalSettings {
+    pub theme_dark: bool,
+    pub font_size: u32,
+    pub auto_save: bool,
+    pub font_family: String,
+    pub line_height: f32,
+    pub max_width: u32,
+}
+
+impl Default for GlobalSettings {
+    fn default() -> Self {
+        Self {
+            theme_dark: false,
+            font_size: 16,
+            auto_save: true,
+            font_family: "Noto Sans JP".to_string(),
+            line_height: 2.0,
+            max_width: 800,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -312,6 +346,7 @@ impl Default for ProjectSettings {
             daily_goal: 1000,
             preview_position: PanelPosition::Right,
             sidebar_position: SidebarPosition::Left,
+            indent_paragraphs: true,
         }
     }
 }

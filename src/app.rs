@@ -60,6 +60,39 @@ fn push_recent(list: &mut Vec<String>, dir: String) {
     save_recent(list);
 }
 
+fn get_total_chars(p: &Project) -> usize {
+    p.chapters.iter().flat_map(|ch| {
+        ch.tales.iter().filter_map(|t| {
+            crate::fs::chapter::load_tale(p, &ch.dir_name, &t.file_name).ok()
+                .map(|c| c.chars().filter(|ch| !ch.is_whitespace()).count())
+        })
+    }).sum()
+}
+
+fn handle_daily_stats(p: &mut Project) {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    if p.daily_stats.last_date != today {
+        let total = get_total_chars(p);
+        p.daily_stats.last_date = today;
+        p.daily_stats.start_count = total;
+        let _ = crate::fs::project::save_project(p);
+    }
+}
+
+fn get_other_files_total(p: &Project, active: &Option<DocRef>) -> usize {
+    p.chapters.iter().flat_map(|ch| {
+        ch.tales.iter().filter_map(|t| {
+            let is_active = active.as_ref().map_or(false, |a| match a {
+                DocRef::Tale { chapter_dir, tale_file, .. } => chapter_dir == &ch.dir_name && tale_file == &t.file_name,
+                _ => false,
+            });
+            if is_active { return None; }
+            crate::fs::chapter::load_tale(p, &ch.dir_name, &t.file_name).ok()
+                .map(|c| c.chars().filter(|ch| !ch.is_whitespace()).count())
+        })
+    }).sum()
+}
+
 #[component]
 pub fn App() -> Element {
     let mut project = use_signal(|| Option::<Project>::None);
@@ -68,6 +101,15 @@ pub fn App() -> Element {
     let mut tab_content: Signal<HashMap<DocRef, String>> = use_signal(HashMap::new);
 
     let content = use_signal(|| String::new());
+    let mut other_files_total = use_signal(|| 0usize);
+    let mut daily_progress = use_signal(|| 0usize);
+
+    use_effect(move || {
+        let cur_count = content.read().chars().filter(|c| !c.is_whitespace()).count();
+        let other = *other_files_total.read();
+        let start = project.read().as_ref().map_or(0, |p| p.daily_stats.start_count);
+        daily_progress.set((cur_count + other).saturating_sub(start));
+    });
 
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
@@ -76,9 +118,12 @@ pub fn App() -> Element {
     let mut rename_target = use_signal(|| (String::new(), String::new()));
     let mut save_notification = use_signal(|| Option::<String>::None);
     let mut is_saved = use_signal(|| true);
-    let mut is_dark = use_signal(|| false);
+    let mut global_settings = use_signal(|| fs::settings::load_global_settings());
+    let mut is_dark = use_memo(move || global_settings.read().theme_dark);
+    let auto_save_enabled = use_memo(move || global_settings.read().auto_save);
+    let font_size = use_memo(move || global_settings.read().font_size);
+    
     let recent_projects = use_signal(|| load_recent());
-    let auto_save_enabled = use_signal(|| true);
     let desktop = use_window();
 
     let mut pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
@@ -90,8 +135,9 @@ pub fn App() -> Element {
     let mut show_editor = use_signal(|| true);
     let mut show_preview = use_signal(|| true);
     let mut focus_mode = use_signal(|| false);
-    let mut font_size = use_signal(|| 16u32);
+
     let mut activity_tab = use_signal(|| ActivityTab::Explorer);
+
 
     let writing_mode_str = use_memo(move || match *writing_mode.read() {
         WritingMode::Vertical => "vertical".to_string(),
@@ -279,8 +325,13 @@ pub fn App() -> Element {
         let mut chapter_version = chapter_version.clone();
         let project = project.clone();
         let mut content_sig = content.clone();
+        let mut other_files_total = other_files_total.clone();
         let mut is_saved = is_saved.clone();
         move |doc: DocRef| {
+            if let Some(ref p) = *project.read() {
+                other_files_total.set(get_other_files_total(p, &Some(doc.clone())));
+            }
+            
             let tabs = open_tabs.read().clone();
             if !tabs.contains(&doc) {
                 if let Some(ref p) = project.read().clone() {
@@ -455,6 +506,7 @@ pub fn App() -> Element {
         let mut proj_sig = project.clone();
         let mut notif = save_notification.clone();
         let mut recent = recent_projects.clone();
+        let mut other_files_total = other_files_total.clone();
         spawn(async move {
             let dir = rfd::FileDialog::new()
                 .set_title("プロジェクトを作成する場所を選択")
@@ -463,8 +515,10 @@ pub fn App() -> Element {
                 match fs::project::create_project(&name, &dir) {
                     Ok(mut p) => {
                         p.settings.author = author;
+                        handle_daily_stats(&mut p);
                         let _ = fs::project::save_project(&p);
                         push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                        other_files_total.set(0);
                         *proj_sig.write() = Some(p);
                     }
                     Err(e) => {
@@ -479,14 +533,17 @@ pub fn App() -> Element {
         let mut proj_sig = project.clone();
         let mut notif = save_notification.clone();
         let mut recent = recent_projects.clone();
+        let mut other_files_total = other_files_total.clone();
         spawn(async move {
             let dir = rfd::FileDialog::new()
                 .set_title("プロジェクトフォルダを選択")
                 .pick_folder();
             if let Some(dir) = dir {
                 match fs::project::load_project(&dir) {
-                    Ok(p) => {
+                    Ok(mut p) => {
+                        handle_daily_stats(&mut p);
                         push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                        other_files_total.set(get_other_files_total(&p, &None));
                         *proj_sig.write() = Some(p);
                     }
                     Err(e) => {
@@ -504,9 +561,10 @@ pub fn App() -> Element {
     let desktop_apply_visibility = desktop.clone();
     let desktop_toggle_dark = desktop.clone();
     let on_toggle_dark = move |_| {
-        let new_val = !*is_dark.read();
-        is_dark.set(new_val);
-        let js = if new_val {
+        let mut gs = global_settings.write();
+        gs.theme_dark = !gs.theme_dark;
+        let _ = fs::settings::save_global_settings(&gs);
+        let js = if gs.theme_dark {
             "document.documentElement.classList.add('dark')"
         } else {
             "document.documentElement.classList.remove('dark')"
@@ -518,11 +576,19 @@ pub fn App() -> Element {
     let on_toggle_editor = move |_| { let v = !*show_editor.read(); show_editor.set(v); };
     let on_toggle_preview = move |_| { let v = !*show_preview.read(); show_preview.set(v); };
     let on_toggle_focus_mode = move |_| { let v = !*focus_mode.read(); focus_mode.set(v); };
-    let on_increase_font = move |_| { let mut f = font_size.write(); if *f < 32 { *f += 1; } };
-    let on_decrease_font = move |_| { let mut f = font_size.write(); if *f > 8 { *f -= 1; } };
+    let on_increase_font = move |_| { 
+        let mut gs = global_settings.write();
+        if gs.font_size < 32 { gs.font_size += 1; }
+        let _ = fs::settings::save_global_settings(&gs);
+    };
+    let on_decrease_font = move |_| { 
+        let mut gs = global_settings.write();
+        if gs.font_size > 8 { gs.font_size -= 1; }
+        let _ = fs::settings::save_global_settings(&gs);
+    };
 
     let on_settings = {
-        let mut project = project.clone();
+        let project = project.clone();
         let mut settings_visible = settings_visible.clone();
         let mut project_name = project_name.clone();
         let mut project_settings = project_settings.clone();
@@ -530,6 +596,9 @@ pub fn App() -> Element {
             if let Some(ref p) = *project.read() {
                 project_name.set(p.name.clone());
                 project_settings.set(p.settings.clone());
+            } else {
+                project_name.set(String::new());
+                project_settings.set(ProjectSettings::default());
             }
             settings_visible.set(true);
         }
@@ -537,12 +606,18 @@ pub fn App() -> Element {
 
     let on_confirm_settings = {
         let mut project = project.clone();
+        let mut global_settings = global_settings.clone();
         let mut save_notification = save_notification.clone();
-        move |(name, settings): (String, ProjectSettings)| {
+        move |(name, p_settings, g_settings): (String, ProjectSettings, crate::model::project::GlobalSettings)| {
+            // Save global settings
+            *global_settings.write() = g_settings.clone();
+            let _ = fs::settings::save_global_settings(&g_settings);
+
+            // Save project settings
             let mut proj = project.write();
             if let Some(ref mut p) = *proj {
                 p.name = name;
-                p.settings = settings;
+                p.settings = p_settings;
                 let _ = fs::project::save_project(p);
                 *save_notification.write() = Some("設定を保存しました".to_string());
             }
@@ -781,6 +856,7 @@ pub fn App() -> Element {
         let mut is_saved = is_saved.clone();
         let mut chapter_version = chapter_version.clone();
         let mut pending_delete = pending_delete.clone();
+        let mut other_files_total = other_files_total.clone();
         move |()| {
             let action = pending_delete.read().clone();
             if let Some(action) = action {
@@ -884,6 +960,7 @@ pub fn App() -> Element {
                     }
                     let _ = fs::project::save_project(p);
                     chapter_version += 1;
+                    other_files_total.set(get_other_files_total(p, &*active_tab.read()));
                 }
                 pending_delete.set(None);
             }
@@ -1031,6 +1108,7 @@ pub fn App() -> Element {
             Toolbar {
                 writing_mode: writing_mode,
                 content: content,
+                daily_progress: daily_progress,
                 project: project,
                 on_new_project: on_new_project,
                 on_open_project: on_open_project,
@@ -1086,11 +1164,14 @@ pub fn App() -> Element {
                     if active_tab.read().is_some() {
                         Editor {
                             content: content,
+                            project: project,
+                            global_settings: global_settings,
                             is_saved: is_saved,
                             on_save: on_save,
-                            font_size: *font_size.read(),
+                            focus_mode: focus_mode,
                             placeholder: editor_placeholder,
                         }
+
                     } else {
                         div { class: "welcome",
                             h1 { "Chronicle" }
@@ -1175,6 +1256,8 @@ pub fn App() -> Element {
                     Preview {
                         content: content,
                         writing_mode: writing_mode_str,
+                        project: project,
+                        global_settings: global_settings,
                     }
                 }
             }
@@ -1185,7 +1268,7 @@ pub fn App() -> Element {
                 is_saved: is_saved,
                 auto_save_enabled: auto_save_enabled,
                 writing_mode: writing_mode_str,
-                font_size: *font_size.read(),
+                font_size: font_size,
                 on_increase_font: on_increase_font,
                 on_decrease_font: on_decrease_font,
             }
@@ -1221,11 +1304,11 @@ pub fn App() -> Element {
                 visible: settings_visible,
                 project_name: project_name,
                 project_settings: project_settings,
-                is_dark: is_dark,
-                auto_save_enabled: auto_save_enabled,
-                font_size: font_size,
+                global_settings: global_settings,
+                project_is_open: project.read().is_some(),
                 on_save: on_confirm_settings,
             }
+
             ExportDialog {
                 visible: export_dialog_visible,
                 on_export: on_export_confirm,

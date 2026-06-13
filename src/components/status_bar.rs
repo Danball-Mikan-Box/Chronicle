@@ -9,9 +9,9 @@ pub fn StatusBar(
     active_tab: Signal<Option<DocRef>>,
     tab_content: Signal<HashMap<DocRef, String>>,
     is_saved: Signal<bool>,
-    auto_save_enabled: Signal<bool>,
+    auto_save_enabled: Memo<bool>,
     writing_mode: Memo<String>,
-    font_size: u32,
+    font_size: Memo<u32>,
     on_increase_font: EventHandler<()>,
     on_decrease_font: EventHandler<()>,
 ) -> Element {
@@ -26,6 +26,7 @@ pub fn StatusBar(
     let char_count = text.chars().filter(|c| !c.is_whitespace()).count();
     let saved = *is_saved.read();
     let auto = *auto_save_enabled.read();
+    let fs = *font_size.read();
 
     rsx! {
         footer { class: "status-bar",
@@ -37,7 +38,7 @@ pub fn StatusBar(
                     if saved { "保存済" } else { "未保存" }
                 }
                 span { class: "status-sep", "|" }
-                span { class: "status-item", "{font_size}px" }
+                span { class: "status-item", "{fs}px" }
             }
             div { class: "status-right",
                 span { class: "status-item", "{char_count} 文字" }

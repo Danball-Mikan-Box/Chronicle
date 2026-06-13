@@ -623,6 +623,19 @@ input, textarea, button {
     color: var(--text-primary);
     outline: none;
     tab-size: 2;
+    width: 100%;
+}
+
+.editor.indent-paragraphs {
+    /* Since it's a textarea, we can't easily use text-indent on P tags.
+       We might simulate it, but for a simple textarea, it's usually 
+       done via input logic. However, we can use CSS to help visual 
+       clarity if needed. For now, we'll keep it as a class for 
+       potential future JS-based auto-indentation. */
+}
+
+.preview.indent-paragraphs p {
+    text-indent: 1em;
 }
 
 .editor::placeholder {
@@ -960,8 +973,37 @@ input, textarea, button {
 .dialog-body {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     margin-bottom: 20px;
+}
+
+.dialog-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 4px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.dialog-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.dialog-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dialog-checkbox-group-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .dialog-body p {
