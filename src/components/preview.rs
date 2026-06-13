@@ -7,11 +7,13 @@ pub fn Preview(content: Signal<String>, writing_mode: Memo<String>) -> Element {
     let html = renderer::render_to_html(&content.read());
     let wm = writing_mode.read().clone();
 
+    let vert_class = if wm == "vertical" { " vertical" } else { "" };
+
     rsx! {
         div {
-            class: "preview",
+            class: "preview{vert_class}",
             dangerous_inner_html: "{html}",
-            style: if wm == "vertical" { "writing-mode: vertical-rl; height: 100%; padding: 40px 20px;" } else { "writing-mode: horizontal-tb;" },
+            "data-wm": "{wm}",
         }
     }
 }

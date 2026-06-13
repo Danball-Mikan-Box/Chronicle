@@ -1,3 +1,18 @@
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.35);
+}
+
 :root {
     --bg-app: #f5f0eb;
     --bg-toolbar: #e8e0d8;
@@ -212,14 +227,14 @@ input, textarea, button {
 
 /* Sidebar */
 .sidebar {
-    width: 240px;
-    flex: none;
+    flex: 0 0 240px;
+    min-width: 150px;
+    max-width: 500px;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--sidebar-border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    min-width: 0;
 }
 
 .sidebar-header {
@@ -385,7 +400,7 @@ input, textarea, button {
 
 /* Editor */
 .editor-pane {
-    flex: none;
+    flex: 1 1 0px;
     display: flex;
     flex-direction: column;
     min-width: 200px;
@@ -488,14 +503,15 @@ input, textarea, button {
     flex: none;
     width: 400px;
     min-width: 200px;
-    overflow: hidden;
     padding: 32px 40px;
     background: var(--bg-preview);
+    display: flex;
+    flex-direction: column;
 }
 
 .preview-pane > .preview {
-    overflow-y: auto;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     min-width: 0;
 }
 
@@ -508,6 +524,37 @@ input, textarea, button {
     line-height: 2;
     max-width: 800px;
     color: var(--text-primary);
+}
+
+.preview:not(.vertical) {
+    overflow: auto;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-wrap: break-word;
+}
+
+.preview.vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    line-height: 2.4;
+    letter-spacing: 0.25em;
+    height: 100%;
+    padding: 40px;
+    box-sizing: border-box;
+    overflow: auto;
+    max-width: none;
+}
+
+.preview.vertical p {
+    text-indent: 0;
+    margin: 0;
+    margin-block-end: 0.5em;
+    margin-inline-end: 0;
+    max-inline-size: 100%;
+}
+
+.preview.vertical .upright {
+    text-orientation: upright;
 }
 
 .preview h1 {
@@ -587,6 +634,82 @@ input, textarea, button {
 
 .preview a:hover {
     text-decoration: underline;
+}
+
+.preview.vertical h1,
+.preview.vertical h2,
+.preview.vertical h3 {
+    margin: 0 0 12px 0;
+    padding-bottom: 0;
+    padding-right: 0;
+    border-bottom: none;
+    border-right: 2px solid var(--border);
+    padding-right: 8px;
+}
+
+.preview.vertical h1 {
+    font-size: 24px;
+    margin: 0 0 16px 0;
+    padding-right: 12px;
+}
+.preview.vertical h2 {
+    font-size: 20px;
+    padding-right: 10px;
+}
+.preview.vertical h3 {
+    font-size: 18px;
+    padding-right: 8px;
+}
+
+.preview.vertical blockquote {
+    border-left: none;
+    border-top: 3px solid var(--border);
+    padding-left: 0;
+    padding-top: 12px;
+    margin: 0 12px 16px 0;
+}
+
+.preview.vertical ul,
+.preview.vertical ol {
+    padding-left: 0;
+    padding-top: 12px;
+    text-orientation: mixed;
+}
+
+.preview.vertical li {
+    margin-right: 0;
+}
+
+.preview.vertical li {
+    margin-bottom: 0;
+    margin-right: 12px;
+    list-style-position: inside;
+}
+
+.preview.vertical hr {
+    margin: 0 12px;
+    width: 1em;
+    border-top: none;
+    border-left: 1px solid var(--border);
+    writing-mode: horizontal-tb;
+}
+
+.preview.vertical table,
+.preview.vertical code,
+.preview.vertical pre {
+    text-orientation: mixed;
+}
+
+.preview.vertical table {
+    writing-mode: horizontal-tb;
+}
+
+.preview.vertical ruby {
+    text-orientation: mixed;
+}
+
+.preview.vertical a {
+    text-orientation: mixed;
 }
 
 .preview table {
@@ -1093,17 +1216,21 @@ input, textarea, button {
     flex-direction: column;
 }
 
-.main-content.preview-bottom .preview-pane {
-    width: 100% !important;
-    height: 35%;
-    min-height: 150px;
-    flex: none;
-    border-top: 1px solid var(--border);
+.main-content.preview-bottom .sidebar {
+    flex: 0 0 auto;
 }
 
 .main-content.preview-bottom .editor-pane {
-    flex: none;
-    min-height: 0;
+    flex: 1 1 0px;
+    min-height: 200px;
+}
+
+.main-content.preview-bottom .preview-pane {
+    flex: 0 0 auto;
+    min-height: 150px;
+    max-height: 80%;
+    border-top: 1px solid var(--border);
+    width: 100%;
 }
 
 .main-content.preview-bottom #resize-preview {

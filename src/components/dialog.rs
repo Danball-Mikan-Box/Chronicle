@@ -13,9 +13,14 @@ pub fn ProjectDialog(
         return Ok(VNode::placeholder());
     }
 
+    let close = move |_| visible.set(false);
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { visible.set(false); }
+    };
+
     rsx! {
-        div { class: "dialog-overlay",
-            div { class: "dialog",
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog", onclick: |e| e.stop_propagation(),
                 h2 { "{title}" }
                 div { class: "dialog-body",
                     label { "作品名" }
@@ -36,7 +41,7 @@ pub fn ProjectDialog(
                 div { class: "dialog-actions",
                     button {
                         class: "dialog-btn",
-                        onclick: move |_| visible.set(false),
+                        onclick: close,
                         "キャンセル"
                     }
                     button {
@@ -75,23 +80,43 @@ pub fn RenameDialog(
     let current_title = target.1.clone();
     let mut new_title = use_signal(|| current_title.clone());
 
+    let dialog_title = if old_name.contains('|') {
+        "話名の変更"
+    } else if old_name.contains(".md") {
+        "資料名の変更"
+    } else {
+        "章名の変更"
+    };
+
+    let close = move |_| visible.set(false);
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { visible.set(false); }
+    };
+
+    let label_text = match dialog_title {
+        "話名の変更" => "新しい話名",
+        "資料名の変更" => "新しい資料名",
+        _ => "新しい章名",
+    };
+    let placeholder = format!("{}を入力", label_text);
+
     rsx! {
-        div { class: "dialog-overlay",
-            div { class: "dialog",
-                h2 { "章名の変更" }
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog", onclick: |e| e.stop_propagation(),
+                h2 { "{dialog_title}" }
                 div { class: "dialog-body",
-                    label { "新しい章名" }
+                    label { "{label_text}" }
                     input {
                         class: "dialog-input",
                         value: "{new_title}",
                         oninput: move |e| new_title.set(e.value()),
-                        placeholder: "章名を入力",
+                        placeholder: "{placeholder}",
                     }
                 }
                 div { class: "dialog-actions",
                     button {
                         class: "dialog-btn",
-                        onclick: move |_| visible.set(false),
+                        onclick: close,
                         "キャンセル"
                     }
                     button {

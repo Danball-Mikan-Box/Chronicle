@@ -80,9 +80,12 @@ pub fn Editor(
     placeholder: String,
 ) -> Element {
     let desktop = use_window();
+    let mut is_composing = use_signal(|| false);
 
     let desktop_sync = desktop.clone();
+    let composing_sync = is_composing.clone();
     use_effect(use_reactive(&chapter_version, move |_| {
+        if *composing_sync.read() { return; }
         let val = content.read().clone();
         let js = format!(
             r#"const e=document.querySelector('.editor');if(e){{e.value={};e.selectionStart=e.selectionEnd=e.value.length;e.focus();}}"#,
@@ -93,7 +96,9 @@ pub fn Editor(
 
     let do_format: Rc<dyn Fn(FormatKind)> = {
         let content = content.clone();
+        let composing_fmt = is_composing.clone();
         Rc::new(move |kind: FormatKind| {
+            if *composing_fmt.read() { return; }
             let mut content = content;
             spawn(async move {
                 let js = r#"
@@ -167,25 +172,40 @@ pub fn Editor(
 
     let on_keydown = {
         let do_format = do_format.clone();
+        let desktop_ed = desktop.clone();
         move |evt: Event<KeyboardData>| {
-            if evt.modifiers().contains(Modifiers::CONTROL) {
-                match evt.key() {
-                    Key::Character(c) if c.as_str() == "s" => {
-                        evt.prevent_default();
-                        on_save.call(());
-                    }
-                    Key::Character(c) if c.as_str() == "b" => {
-                        evt.prevent_default();
-                        do_format(FormatKind::Bold);
-                    }
-                    Key::Character(c) if c.as_str() == "i" => {
-                        evt.prevent_default();
-                        do_format(FormatKind::Italic);
-                    }
-                    _ => {}
+            if evt.is_composing() { return; }
+            match evt.key() {
+                Key::Escape => {
+                    let _ = desktop_ed.webview.evaluate_script("document.querySelector('.editor').blur();");
+                    return;
                 }
+                Key::Character(c) if evt.modifiers().contains(Modifiers::CONTROL) => {
+                    match c.as_str() {
+                        "s" => { evt.prevent_default(); on_save.call(()); }
+                        "b" => { evt.prevent_default(); do_format(FormatKind::Bold); }
+                        "i" => { evt.prevent_default(); do_format(FormatKind::Italic); }
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         }
+    };
+
+    let mut composing = is_composing.clone();
+    let on_compositionstart = move |_: CompositionEvent| {
+        composing.set(true);
+    };
+
+    let on_compositionend = move |_: CompositionEvent| {
+        composing.set(false);
+    };
+
+    let mut composing = is_composing.clone();
+    let on_input = move |evt: Event<FormData>| {
+        if *composing.read() { return; }
+        content.set(evt.value());
     };
 
     rsx! {
@@ -193,8 +213,10 @@ pub fn Editor(
             FormattingBar { on_format: on_format }
             textarea {
                 class: "editor",
-                oninput: move |evt| content.set(evt.value()),
+                oninput: on_input,
                 onkeydown: on_keydown,
+                oncompositionstart: on_compositionstart,
+                oncompositionend: on_compositionend,
                 placeholder: "{placeholder}",
                 style: "font-size: {font_size}px;",
             }

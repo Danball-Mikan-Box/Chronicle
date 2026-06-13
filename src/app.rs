@@ -122,18 +122,13 @@ pub fn App() -> Element {
     if (window.__chronicle_init) return;
     window.__chronicle_init = true;
 
-    var S = {
-        sidebarPct: 0.20,
-        previewPct: 0.35,
-        sidebarMin: 150, sidebarMax: 500,
-        previewMin: 200, previewMax: 800,
-        editorMin: 200,
-    };
     var DRAG = null;
+    var MIN_SB = 150, MAX_SB = 500;
+    var MIN_PV = 200, MAX_PV = 800;
+    var MIN_ED = 200;
+    var HW = 5;
 
-    function visible(el) {
-        return el && el.offsetParent !== null;
-    }
+    function vis(el) { return el && el.offsetParent !== null; }
 
     function apply() {
         var c = document.querySelector('.main-content');
@@ -142,107 +137,44 @@ pub fn App() -> Element {
         var sb = document.querySelector('.sidebar');
         var ed = document.querySelector('.editor-pane');
         var pv = document.querySelector('.preview-pane');
-
-        function hw() { var h = document.querySelector('.resize-handle'); return h ? h.offsetWidth : 5; }
-        function hh() { var h = document.querySelector('.resize-handle'); return h ? h.offsetHeight : 5; }
-
-        var vsb = visible(sb);
-        var ved = visible(ed);
-        var vpv = visible(pv);
+        var cw = c.offsetWidth;
+        var ch = c.offsetHeight;
+        var vsb = vis(sb), ved = vis(ed), vpv = vis(pv);
 
         if (pb) {
-            // ── preview-bottom mode ──
-            // Horizontal: sidebar | handle | editor  (preview is below)
-            // Vertical:   top area | handle | preview
-            var ch = c.offsetHeight;
-            var cw = c.offsetWidth;
-            var hhVal = hh();
-            // Vertical split
-            var vpvH = Math.round(ch * S.previewPct);
-            vpvH = Math.max(S.previewMin, Math.min(S.previewMax, vpvH));
-            if (vpv && ved) {
-                // Preview height
-                pv.style.width = 'auto';
-                pv.style.height = vpvH + 'px';
-                // Remaining vertical space for sidebar + editor
-                var topH = ch - hhVal - vpvH;
-                var sbH = Math.round(topH * 0.3); // sidebar takes 30% of top area
-                sbH = Math.max(S.sidebarMin, Math.min(S.sidebarMax, sbH));
-                if (sb && ved) {
-                    sb.style.width = sbH + 'px';
-                    ed.style.width = (cw - hw() - sbH) + 'px';
-                } else if (sb) {
-                    sb.style.width = cw + 'px';
-                } else if (ved) {
-                    ed.style.width = cw + 'px';
-                }
-            } else if (vpv) {
-                pv.style.width = 'auto';
-                pv.style.height = vpvH + 'px';
-                if (sb) sb.style.width = cw + 'px';
-                if (ved) ed.style.width = cw + 'px';
-            } else {
-                // No preview
-                if (sb && ved) {
-                    sb.style.width = Math.round(cw * 0.3) + 'px';
-                    ed.style.width = (cw - hw() - sb.offsetWidth) + 'px';
-                } else {
-                    if (sb) sb.style.width = cw + 'px';
-                    if (ved) ed.style.width = cw + 'px';
-                }
+            // sidebar | handle | editor  (preview below)
+            // Read current heights
+            var pvH = pv ? (parseFloat(pv.style.height) || 300) : 300;
+            var sbW = sb ? (parseFloat(sb.style.width) || 240) : 0;
+            // Clamp preview height
+            pvH = Math.max(MIN_PV, Math.min(MAX_PV, Math.min(pvH, ch - HW - MIN_ED - (vsb ? MIN_SB : 0))));
+            if (vpv) { pv.style.height = pvH + 'px'; pv.style.flexBasis = pvH + 'px'; }
+            // Clamp sidebar width
+            if (vsb) {
+                sbW = Math.max(MIN_SB, Math.min(MAX_SB, Math.min(sbW, cw - HW - MIN_ED)));
+                sb.style.width = sbW + 'px';
             }
         } else {
-            // ── horizontal mode ──
-            var cw = c.offsetWidth;
-            var hwVal = hw();
-            var nHandles = 0;
-            if (vsb && ved) nHandles++;
-            if (ved && vpv) nHandles++;
-            var aw = cw - nHandles * hwVal; // space for panels
+            var aw = cw - ((vsb && ved ? 1 : 0) + (ved && vpv ? 1 : 0)) * HW;
             if (aw <= 0) return;
-
-            if (nHandles === 2) {
-                // All three visible
-                var sw = Math.round(aw * S.sidebarPct);
-                sw = Math.max(S.sidebarMin, Math.min(S.sidebarMax, sw));
-                var pw = Math.round(aw * S.previewPct);
-                pw = Math.max(S.previewMin, Math.min(S.previewMax, pw));
-                var ew = aw - sw - pw;
-                if (ew < S.editorMin) {
-                    // Editor too small — steal from both
-                    var deficit = S.editorMin - ew;
-                    var spSw = sw - Math.round(deficit * S.sidebarPct / (S.sidebarPct + S.previewPct));
-                    var spPw = pw - Math.round(deficit * S.previewPct / (S.sidebarPct + S.previewPct));
-                    sw = Math.max(S.sidebarMin, spSw);
-                    pw = Math.max(S.previewMin, spPw);
-                    ew = aw - sw - pw;
-                }
-                sb.style.width = sw + 'px';
-                ed.style.width = ew + 'px';
-                pv.style.width = pw + 'px';
-                // Update stored pcts
-                S.sidebarPct = sw / aw;
-                S.previewPct = pw / aw;
-            } else if (nHandles === 1 && vsb && ved) {
-                // Sidebar + editor only
-                sb.style.width = Math.round(aw * S.sidebarPct / (S.sidebarPct + (1 - S.sidebarPct - S.previewPct))) + 'px';
-                ed.style.width = (aw - sb.offsetWidth) + 'px';
-            } else if (nHandles === 1 && ved && vpv) {
-                // Editor + preview only
-                pv.style.width = Math.round(aw * S.previewPct / (S.previewPct + (1 - S.sidebarPct - S.previewPct))) + 'px';
-                ed.style.width = (aw - pv.offsetWidth) + 'px';
-            } else if (vsb) {
-                sb.style.width = cw + 'px';
-            } else if (ved) {
-                ed.style.width = cw + 'px';
-            } else if (vpv) {
-                pv.style.width = cw + 'px';
+            // Read current widths
+            var sbW = sb ? (parseFloat(sb.style.width) || 240) : 0;
+            var pvW = pv ? (parseFloat(pv.style.width) || 400) : 0;
+            // Clamp sidebar: can't starve editor + preview
+            if (vsb) {
+                sbW = Math.max(MIN_SB, Math.min(MAX_SB, Math.min(sbW, aw - (vpv ? MIN_PV : 0) - MIN_ED)));
+                sb.style.width = sbW + 'px';
+            }
+            // Clamp preview: can't starve editor + sidebar
+            if (vpv) {
+                pvW = Math.max(MIN_PV, Math.min(MAX_PV, Math.min(pvW, aw - (vsb ? MIN_SB : 0) - MIN_ED)));
+                pv.style.width = pvW + 'px';
             }
         }
     }
     window.__chronicle_apply = apply;
 
-    // ── Drag resize ──
+    // Drag
     document.addEventListener('mousedown', function(e) {
         var h = e.target.closest('.resize-handle');
         if (!h) return;
@@ -250,52 +182,82 @@ pub fn App() -> Element {
         var c = document.querySelector('.main-content');
         if (!c) return;
         var pb = c.classList.contains('preview-bottom');
-        var isVertical = pb && h.id === 'resize-preview';
+        var isV = pb && h.id === 'resize-preview';
+        var el = h.id === 'resize-sidebar' ? document.querySelector('.sidebar') : document.querySelector('.preview-pane');
+        if (!el) return;
         DRAG = {
             id: h.id,
-            startPos: isVertical ? e.clientY : e.clientX,
-            sidebarPct: S.sidebarPct,
-            previewPct: S.previewPct,
-            isVertical: isVertical,
-            cSize: isVertical ? c.offsetHeight : c.offsetWidth,
+            startPos: isV ? e.clientY : e.clientX,
+            startSize: isV ? el.offsetHeight : el.offsetWidth,
+            isV: isV,
         };
     });
 
     document.addEventListener('mousemove', function(e) {
         if (!DRAG) return;
+        var delta = (DRAG.isV ? e.clientY : e.clientX) - DRAG.startPos;
         var c = document.querySelector('.main-content');
         if (!c) return;
         var pb = c.classList.contains('preview-bottom');
-        var pos = DRAG.isVertical ? e.clientY : e.clientX;
-        var delta = pos - DRAG.startPos;
-        var cSize = DRAG.isVertical ? c.offsetHeight : c.offsetWidth;
-        var hSize = DRAG.isVertical
-            ? (document.querySelector('.resize-handle') ? document.querySelector('.resize-handle').offsetHeight : 5)
-            : (document.querySelector('.resize-handle') ? document.querySelector('.resize-handle').offsetWidth : 5);
-        var baseSize = DRAG.cSize - (DRAG.isVertical ? hSize : 2 * hSize);
-        if (baseSize <= 0) return;
+        var cSize = DRAG.isV ? c.offsetHeight : c.offsetWidth;
+        var ed = document.querySelector('.editor-pane');
+        var sb = document.querySelector('.sidebar');
+        var pv = document.querySelector('.preview-pane');
 
         if (DRAG.id === 'resize-sidebar') {
-            var np = DRAG.sidebarPct + delta / baseSize;
-            np = Math.max(S.sidebarMin / baseSize, Math.min(Math.min(S.sidebarMax, cSize - S.editorMin - S.previewMin) / baseSize, np));
-            S.sidebarPct = np;
+            if (!sb) return;
+            var vsb = vis(sb), ved = vis(ed), vpv = pv && vis(pv);
+            var maxW = cSize - HW - (vpv ? MIN_PV : 0) - MIN_ED;
+            var newW = Math.max(MIN_SB, Math.min(MAX_SB, DRAG.startSize + delta, maxW));
+            sb.style.width = newW + 'px';
         } else if (DRAG.id === 'resize-preview') {
-            // Dragging right = preview smaller, so negative delta
-            var sign = DRAG.isVertical ? 1 : -1;
-            var np = DRAG.previewPct + sign * delta / baseSize;
-            np = Math.max(S.previewMin / baseSize, Math.min(Math.min(S.previewMax, cSize - S.editorMin - S.sidebarMin) / baseSize, np));
-            S.previewPct = np;
+            if (!pv) return;
+            var vsb = sb && vis(sb), ved = vis(ed), vpv = vis(pv);
+            if (DRAG.isV) {
+                // Drag up = preview smaller, so negative delta
+                var maxH = cSize - HW - MIN_ED;
+                var newH = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxH));
+                pv.style.height = newH + 'px';
+                pv.style.flexBasis = newH + 'px';
+            } else {
+                // Drag right = preview smaller, so negative delta
+                var maxW = cSize - HW - (vsb ? MIN_SB : 0) - MIN_ED;
+                var newW = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxW));
+                pv.style.width = newW + 'px';
+            }
         }
-        apply();
     });
 
     document.addEventListener('mouseup', function() { DRAG = null; });
     document.addEventListener('mouseleave', function() { DRAG = null; });
 
-    window.addEventListener('resize', function() {
-        if (window.__resizeTimer) clearTimeout(window.__resizeTimer);
-        window.__resizeTimer = setTimeout(apply, 30);
-    });
+    // ResizeObserver for reliable resize handling
+    if (window.ResizeObserver) {
+        var mc = document.querySelector('.main-content');
+        if (mc) {
+            var ro = new ResizeObserver(function() { apply(); });
+            ro.observe(mc);
+        }
+    }
+
+    // Preview scroll follow
+    var p = document.querySelector('.preview');
+    if (p && !p._ps) {
+        p._ps = true;
+        new MutationObserver(function() {
+            requestAnimationFrame(function() {
+                var e = document.querySelector('.editor');
+                var p2 = document.querySelector('.preview');
+                if (!e || !p2) return;
+                var r = e.value.length ? e.selectionStart / e.value.length : 0;
+                if (p2.classList.contains('vertical')) {
+                    p2.scrollLeft = (1 - r) * (p2.scrollWidth - p2.clientWidth);
+                } else {
+                    p2.scrollTop = r * (p2.scrollHeight - p2.clientHeight);
+                }
+            });
+        }).observe(p, { childList: true, subtree: true, characterData: true });
+    }
 
     apply();
 })();
