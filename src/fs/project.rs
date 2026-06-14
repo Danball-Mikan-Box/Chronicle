@@ -4,9 +4,11 @@ use std::path::Path;
 use crate::model::project::Project;
 
 pub fn create_project(name: &str, dir: &Path) -> Result<Project, String> {
-    let root_dir = dir.join(name);
+    let safe_name = crate::model::project::Project::sanitize_name(name, 50);
+    let safe_name = if safe_name.is_empty() { "project".to_string() } else { safe_name };
+    let root_dir = dir.join(&safe_name);
     if root_dir.exists() {
-        return Err(format!("ディレクトリ '{}' は既に存在します", name));
+        return Err(format!("ディレクトリ '{}' は既に存在します", safe_name));
     }
     fs::create_dir_all(&root_dir).map_err(|e| e.to_string())?;
     fs::create_dir_all(root_dir.join("chapters")).map_err(|e| e.to_string())?;

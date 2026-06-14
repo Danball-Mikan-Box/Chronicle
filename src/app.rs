@@ -63,6 +63,9 @@ fn push_recent(list: &mut Vec<String>, dir: String) {
 fn get_total_chars(p: &Project) -> usize {
     p.chapters.iter().flat_map(|ch| {
         ch.tales.iter().filter_map(|t| {
+            if let Some(cached) = t.cached_char_count {
+                return Some(cached);
+            }
             crate::fs::chapter::load_tale(p, &ch.dir_name, &t.file_name).ok()
                 .map(|c| c.chars().filter(|ch| !ch.is_whitespace()).count())
         })
@@ -87,6 +90,9 @@ fn get_other_files_total(p: &Project, active: &Option<DocRef>) -> usize {
                 _ => false,
             });
             if is_active { return None; }
+            if let Some(cached) = t.cached_char_count {
+                return Some(cached);
+            }
             crate::fs::chapter::load_tale(p, &ch.dir_name, &t.file_name).ok()
                 .map(|c| c.chars().filter(|ch| !ch.is_whitespace()).count())
         })
@@ -403,7 +409,7 @@ pub fn App() -> Element {
     };
 
     let mut do_save_current = {
-        let project = project.clone();
+        let mut project = project.clone();
         let active_tab = active_tab.clone();
         let tab_content = tab_content.clone();
         let mut is_saved = is_saved.clone();
@@ -411,11 +417,26 @@ pub fn App() -> Element {
         let mut content_sig = content.clone();
         move || {
             let doc = active_tab.read().clone();
-            let p = project.read().clone();
-            if let (Some(d), Some(ref proj)) = (doc, p) {
+            let mut p = project.write();
+            if let (Some(d), Some(ref mut proj)) = (doc, p.as_mut()) {
                 if let Some(text) = tab_content.read().get(&d).cloned() {
                     match save_doc_content(proj, &d, &text) {
                         Ok(_) => {
+                            // Update character count cache
+                            if let DocRef::Tale { chapter_dir, tale_file, .. } = &d {
+                                let count = text.chars().filter(|c| !c.is_whitespace()).count();
+                                for ch in &mut proj.chapters {
+                                    if ch.dir_name == *chapter_dir {
+                                        for t in &mut ch.tales {
+                                            if t.file_name == *tale_file {
+                                                t.cached_char_count = Some(count);
+                                                break;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
                             *save_notification.write() = Some("保存しました".to_string());
                             is_saved.set(true);
                             content_sig.set(text);
@@ -973,8 +994,8 @@ pub fn App() -> Element {
         move |(old_file, new_title): (String, String)| {
             let mut proj = project.write();
             if let Some(ref mut p) = *proj {
-                if let Some(old_f) = p.rename_material(&old_file, &new_title) {
-                    let _ = fs::material::rename_material_file(p, &old_f, &old_file);
+                if let Some((old_f, new_f)) = p.rename_material(&old_file, &new_title) {
+                    let _ = fs::material::rename_material_file(p, &old_f, &new_f);
                     let _ = fs::project::save_project(p);
 
                     let new_doc = DocRef::Material {
@@ -1036,8 +1057,10 @@ pub fn App() -> Element {
 
     // ── Auto-save ──
 
-let auto_save = auto_save_enabled.clone();
+    let auto_save = auto_save_enabled.clone();
     let mut last_tc = use_signal(|| String::new());
+    let mut save_gen: Signal<u64> = use_signal(|| 0);
+    let mut proj = project.clone();
     use_effect(move || {
         let doc = active_tab.read().clone();
         let cur = doc.as_ref()
@@ -1045,14 +1068,35 @@ let auto_save = auto_save_enabled.clone();
             .unwrap_or_default();
         if cur != *last_tc.read() && *auto_save.read() {
             last_tc.set(cur.clone());
-            let proj = project.clone();
+            let g = *save_gen.read() + 1;
+            *save_gen.write() = g;
             let tc = tab_content.clone();
+            let gen_sig = save_gen.clone();
+            let mut pclone = proj.clone();
             spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                let p = proj.read().clone();
-                if let (Some(d), Some(ref proj)) = (doc, p) {
-                    if let Some(text) = tc.read().get(&d).cloned() {
-                        let _ = save_doc_content(proj, &d, &text);
+                if *gen_sig.read() != g {
+                    return;
+                }
+                let d = doc.clone();
+                let mut p = pclone.write();
+                if let (Some(ref doc), Some(ref mut proj)) = (d, p.as_mut()) {
+                    if let Some(text) = tc.read().get(doc).cloned() {
+                        let _ = save_doc_content(proj, doc, &text);
+                        if let DocRef::Tale { chapter_dir, tale_file, .. } = doc {
+                            let count = text.chars().filter(|c| !c.is_whitespace()).count();
+                            for ch in &mut proj.chapters {
+                                if ch.dir_name == *chapter_dir {
+                                    for t in &mut ch.tales {
+                                        if t.file_name == *tale_file {
+                                            t.cached_char_count = Some(count);
+                                            break;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             });

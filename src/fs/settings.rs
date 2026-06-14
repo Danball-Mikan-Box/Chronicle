@@ -3,10 +3,15 @@ use std::path::PathBuf;
 use crate::model::project::GlobalSettings;
 
 fn get_settings_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
-    path.pop();
-    path.push("settings.json");
-    path
+    let config_dir = std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home).join(".config")
+        });
+    let app_dir = config_dir.join("chronicle");
+    let _ = std::fs::create_dir_all(&app_dir);
+    app_dir.join("settings.json")
 }
 
 pub fn save_global_settings(settings: &GlobalSettings) -> Result<(), String> {

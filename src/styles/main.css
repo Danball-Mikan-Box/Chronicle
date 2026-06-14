@@ -38,6 +38,10 @@
     --notif-text: #faf8f5;
 }
 
+* {
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
 html.dark {
     --bg-app: #1a1a2e;
     --bg-toolbar: #16213e;
@@ -675,6 +679,11 @@ input, textarea, button {
     height: 100%;
     box-sizing: border-box;
     overflow-wrap: break-word;
+    text-transform: full-width;
+}
+.preview:not(.vertical) code,
+.preview:not(.vertical) pre {
+    text-transform: none;
 }
 
 .preview.vertical {
@@ -689,6 +698,10 @@ input, textarea, button {
     box-sizing: border-box;
     overflow: auto;
     max-width: none;
+}
+.preview.vertical code,
+.preview.vertical pre {
+    text-transform: none;
 }
 
 .preview.vertical p {
@@ -727,7 +740,10 @@ input, textarea, button {
 
 .preview p {
     margin-bottom: 14px;
-    text-indent: 1em;
+}
+
+.preview:not(.indent-paragraphs) p {
+    text-indent: 0;
 }
 
 .preview blockquote {
@@ -882,6 +898,24 @@ input, textarea, button {
 .preview rt {
     font-size: 0.5em;
     color: var(--text-muted);
+}
+
+/* Footnotes */
+.footnote-definition {
+    margin-top: 1em;
+    padding-top: 0.5em;
+    border-top: 1px solid var(--border);
+}
+
+.footnote-definition .footnote-definition-label {
+    font-weight: bold;
+    margin-right: 0.5em;
+}
+
+.footnote-ref a {
+    text-decoration: none;
+    font-size: 0.8em;
+    vertical-align: super;
 }
 
 /* Status bar */

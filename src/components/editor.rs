@@ -56,7 +56,7 @@ fn apply_format(sel: &str, kind: FormatKind) -> (String, usize, usize) {
             if empty {
                 ("[リンクテキスト](url)".to_string(), 1, 7)
             } else {
-                (format!("[{}](url)", sel), 1 + utf16_len(sel) + 3, 1 + utf16_len(sel) + 6)
+                (format!("[{}](url)", sel), 1, 1 + utf16_len(sel))
             }
         }
         FormatKind::Ruby => {

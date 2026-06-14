@@ -32,7 +32,7 @@ impl Project {
         }
     }
 
-    fn sanitize_name(s: &str, max: usize) -> String {
+    pub fn sanitize_name(s: &str, max: usize) -> String {
         s.chars()
             .take(max)
             .collect::<String>()
@@ -88,6 +88,7 @@ impl Project {
             title: title.to_string(),
             file_name,
             order,
+            cached_char_count: None,
         };
         ch.tales.push(entry.clone());
         Some(entry)
@@ -127,7 +128,13 @@ impl Project {
     pub fn add_material(&mut self, title: &str, category: MaterialCategory) -> MaterialEntry {
         let order = self.materials.len();
         let safe = Self::sanitize_name(title, 30).replace(' ', "-");
-        let file_name = format!("{}.md", if safe.is_empty() { "無題" } else { &safe });
+        let base = if safe.is_empty() { "無題" } else { &safe };
+        let mut file_name = format!("{}.md", base);
+        let mut counter = 1;
+        while self.materials.iter().any(|m| m.file_name == file_name) {
+            file_name = format!("{}-{}.md", base, counter);
+            counter += 1;
+        }
         let entry = MaterialEntry {
             title: title.to_string(),
             file_name,
@@ -138,14 +145,14 @@ impl Project {
         entry
     }
 
-    pub fn rename_material(&mut self, old_file: &str, new_title: &str) -> Option<String> {
+    pub fn rename_material(&mut self, old_file: &str, new_title: &str) -> Option<(String, String)> {
         let entry = self.materials.iter_mut().find(|m| m.file_name == old_file)?;
         let safe = Self::sanitize_name(new_title, 30).replace(' ', "-");
         let new_file = format!("{}.md", if safe.is_empty() { "無題" } else { &safe });
         entry.title = new_title.to_string();
         let old = entry.file_name.clone();
-        entry.file_name = new_file;
-        Some(old)
+        entry.file_name = new_file.clone();
+        Some((old, new_file))
     }
 
     pub fn remove_material(&mut self, file_name: &str) {
@@ -190,6 +197,8 @@ pub struct TaleEntry {
     pub title: String,
     pub file_name: String,
     pub order: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_char_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

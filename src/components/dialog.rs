@@ -80,7 +80,7 @@ pub fn ExportDialog(
 
     let formats = [
         (ExportFormat::ProjectZip, "プロジェクト丸ごと (ZIP)", "プロジェクトの全ファイルをZIPに圧縮して出力します。バックアップに最適です。ファイル名は -backup.zip になります。"),
-        (ExportFormat::SiteZip, "サイト出力（ZIP）", "HTML サイト形式で出力し、index.html が含まれます。"),
+        (ExportFormat::SiteZip, "サイト出力（ZIP）", "Flaxiaへの投稿用。HTML サイト形式で出力し、index.html が含まれます。"),
     ];
 
     rsx! {
