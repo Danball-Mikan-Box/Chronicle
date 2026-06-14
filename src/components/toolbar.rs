@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 
 use crate::model::project::{Project, WritingMode};
+use crate::model::version::VERSION;
 
 #[component]
 pub fn Toolbar(
@@ -58,7 +59,7 @@ pub fn Toolbar(
             div {
                 class: "titlebar",
                 onmousedown: move |_| { desktop.drag(); },
-                span { class: "titlebar-text", "Chronicle" }
+                span { class: "titlebar-text", "Chronicle v{VERSION}" }
                 div { class: "titlebar-controls",
                     button {
                         class: "titlebar-btn",

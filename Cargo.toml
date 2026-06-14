@@ -5,6 +5,12 @@ tao = { path = "patches/tao-0.30.8" }
 name = "chronicle"
 version = "0.1.0"
 edition = "2024"
+description = "小説執筆支援アプリケーション"
+authors = ["Chronicle"]
+license = "MIT"
+homepage = "https://github.com/mikan/chronicle"
+repository = "https://github.com/mikan/chronicle"
+categories = ["text-processing", "writing"]
 
 [dependencies]
 dioxus = { version = "0.6", features = ["desktop", "mobile", "document"] }
@@ -25,6 +31,32 @@ rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "t
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 rfd = { version = "0.14", default-features = false }
+
+[package.metadata.deb]
+maintainer = "Chronicle"
+depends = "libgtk-3-0, libwebkit2gtk-4.1-0, libjavascriptcoregtk-4.1-0, libcairo2, libpango-1.0-0, libgdk-pixbuf-2.0-0, libglib2.0-0"
+extended-description = """小説執筆支援アプリケーション
+
+小説家のための執筆環境を提供するデスクトップアプリケーションです。"""
+priority = "optional"
+section = "text"
+assets = [
+    ["target/release/chronicle", "usr/bin/", "755"],
+    ["Chronicle.png", "usr/share/icons/hicolor/64x64/apps/chronicle.png", "644"],
+    ["Chronicle.svg", "usr/share/icons/hicolor/scalable/apps/chronicle.svg", "644"],
+]
+
+[package.metadata.generate_rpm]
+assets = [
+    { source = "target/release/chronicle", dest_dir = "/usr/bin", mode = "755" },
+    { source = "Chronicle.png", dest_dir = "/usr/share/icons/hicolor/64x64/apps", mode = "644" },
+    { source = "Chronicle.svg", dest_dir = "/usr/share/icons/hicolor/scalable/apps", mode = "644" },
+]
+requires = ["libgtk-3", "webkit2gtk4.1", "libcairo2", "pango", "gdk-pixbuf2", "glib2"]
+
+[package.metadata.wix]
+upgrade-guid = "C39B8E5A-1E2F-4A7B-9D6C-8F3A2E5B1D4C"
+path-guid = "B8D4A3E1-9F2C-4D6E-8A7B-1C3D2E5F9A0B"
 
 [features]
 # Enable default desktop build

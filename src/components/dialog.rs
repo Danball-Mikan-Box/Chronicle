@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::model::project::{PanelPosition, ProjectSettings, SidebarPosition, WritingMode};
+use crate::model::version::VERSION;
 use crate::export::ExportFormat;
 
 #[derive(Debug, Clone)]
@@ -544,6 +545,7 @@ pub fn SettingsDialog(
                         }
                     }
                 }
+                div { class: "dialog-version", "Chronicle v{VERSION}" }
                 div { class: "dialog-actions",
                     button {
                         class: "dialog-btn",
