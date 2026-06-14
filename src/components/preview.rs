@@ -19,15 +19,13 @@ pub fn Preview(
     let indent_class = if settings.indent_paragraphs { " indent-paragraphs" } else { "" };
 
     let margin = if wm == "vertical" { "margin-left: auto; margin-right: 0;" } else { "margin-left: 0; margin-right: auto;" };
-    let transform = if wm == "vertical" { "text-transform: full-width;" } else { "text-transform: full-width;" };
     let style = format!(
-        "font-family: '{}'; font-size: {}px; line-height: {}; max-width: {}px; {} {}",
+        "font-family: '{}'; font-size: {}px; line-height: {}; max-width: {}px; {}",
         gs.font_family,
         gs.font_size,
         gs.line_height,
         if wm == "vertical" { "none".to_string() } else { gs.max_width.to_string() },
-        margin,
-        transform
+        margin
     );
 
     rsx! {

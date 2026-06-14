@@ -3,7 +3,8 @@ use super::parser;
 pub fn render_to_html(markdown: &str) -> String {
     let preprocessed = preprocess(markdown);
     let html = parser::parse_markdown(&preprocessed);
-    wrap_punctuation(&html)
+    let html = wrap_punctuation(&html);
+    to_fullwidth(&html)
 }
 
 fn wrap_punctuation(html: &str) -> String {
@@ -53,6 +54,57 @@ fn push_processed_text(result: &mut String, text: &str) {
     if !buf.is_empty() {
         result.push_str(&buf);
     }
+}
+
+/// Convert half-width ASCII to full-width, except inside <code>, <pre>, <a> and HTML tags.
+fn to_fullwidth(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut in_tag = false;
+    let mut in_code = false;
+    let mut in_anchor = false;
+    let mut tag_name = String::new();
+
+    for c in html.chars() {
+        match c {
+            '<' => {
+                in_tag = true;
+                tag_name.clear();
+                result.push(c);
+            }
+            '>' if in_tag => {
+                in_tag = false;
+                if tag_name == "code" || tag_name == "/code" || tag_name == "pre" || tag_name == "/pre" {
+                    in_code = !in_code;
+                }
+                if tag_name == "a" || tag_name == "/a" {
+                    in_anchor = !in_anchor;
+                }
+                result.push(c);
+            }
+            _ if in_tag => {
+                if tag_name.len() < 10 {
+                    if c.is_ascii_alphabetic() || c == '/' {
+                        tag_name.push(c);
+                    }
+                }
+                result.push(c);
+            }
+            _ if in_code || in_anchor => {
+                result.push(c);
+            }
+            _ => {
+                // Convert half-width ASCII (except space) to full-width
+                let code = c as u32;
+                if code >= 0x21 && code <= 0x7E {
+                    let full = char::from_u32(code + 0xFEE0).unwrap_or(c);
+                    result.push(full);
+                } else {
+                    result.push(c);
+                }
+            }
+        }
+    }
+    result
 }
 
 fn preprocess(input: &str) -> String {
