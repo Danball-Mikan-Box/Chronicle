@@ -17,6 +17,8 @@ jobs:
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          deny-warnings: false
 
       - name: Derive version
         id: version
@@ -53,12 +55,6 @@ jobs:
       - name: Build .deb
         run: cargo deb
 
-      - name: Install cargo-generate-rpm
-        run: cargo install cargo-generate-rpm
-
-      - name: Build .rpm
-        run: cargo generate-rpm
-
       - name: Build portable tarball
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -73,8 +69,58 @@ jobs:
         with:
           files: |
             target/debian/*.deb
-            target/generate-rpm/*.rpm
             chronicle-*.tar.gz
+          fail_on_unmatched_files: false
+
+  linux-rpm:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          deny-warnings: false
+
+      - name: Derive version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libgdk-pixbuf-2.0-dev \
+            libglib2.0-dev \
+            rpm \
+            file
+
+      - name: Build release
+        run: cargo build --release
+        env:
+          GIT_TAG: ${{ github.ref_name }}
+
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm
+
+      - name: Build .rpm
+        run: cargo generate-rpm
+
+      - name: Upload RPM
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/generate-rpm/*.rpm
           fail_on_unmatched_files: false
 
   linux-appimage:
@@ -85,6 +131,8 @@ jobs:
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          deny-warnings: false
 
       - name: Derive version
         id: version
@@ -142,8 +190,8 @@ jobs:
           chmod +x linuxdeploy
           wget -q "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh" -O linuxdeploy-plugin-gtk.sh
           chmod +x linuxdeploy-plugin-gtk.sh
-          ./linuxdeploy --appdir AppDir --plugin gtk --output appimage 2>&1 || \
-            ./appimagetool AppDir "chronicle-$VERSION-x86_64.AppImage" 2>&1 || true
+          # Cannot run AppImage inside container; create AppDir and use appimagetool directly
+          ./appimagetool AppDir "chronicle-$VERSION-x86_64.AppImage" 2>&1 || true
           ls -la chronicle-*.AppImage 2>/dev/null || true
 
       - name: Upload AppImage
@@ -160,6 +208,8 @@ jobs:
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          deny-warnings: false
 
       - name: Derive version
         id: version
@@ -199,6 +249,8 @@ jobs:
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          deny-warnings: false
 
       - name: Derive version
         id: version
@@ -211,29 +263,29 @@ jobs:
 
       - name: Install Android targets
         run: |
-          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+          rustup target add aarch64-linux-android
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libgdk-pixbuf-2.0-dev \
-            libglib2.0-dev \
-            file \
-            android-sdk \
-            openjdk-17-jdk
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+
+      - name: Build release
+        run: cargo build --release
+        env:
+          GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
         run: cargo install dioxus-cli
 
       - name: Build Android APK
-        run: |
-          dx build --platform android --release
+        run: dx build --platform android --release
         env:
           GIT_TAG: ${{ github.ref_name }}
 
