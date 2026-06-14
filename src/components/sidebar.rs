@@ -117,11 +117,11 @@ pub fn Sidebar(
                                         if *expanded.read() {
                                             ul { class: "tale-list",
                                                 {ch.tales.iter().map(|tale| {
-                                                    let t_ch_dir = ch_dir.clone();
+                                                    let _t_ch_dir = ch_dir.clone();
                                                     let t_file = tale.file_name.clone();
                                                     let t_title = tale.title.clone();
-                                                    let t_ch_ren = ch_dir.clone();
-                                                    let t_old_file = tale.file_name.clone();
+                                                    let _t_ch_ren = ch_dir.clone();
+                                                    let _t_old_file = tale.file_name.clone();
                                                     let t_ch_del = ch_dir.clone();
                                                     let t_file_del = tale.file_name.clone();
                                                     let t_active_ch_dir = ch_dir.clone();

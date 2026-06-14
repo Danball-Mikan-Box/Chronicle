@@ -104,13 +104,13 @@ fn get_other_files_total(p: &Project, active: &Option<DocRef>) -> usize {
 
 #[component]
 pub fn App() -> Element {
-    let mut project = use_signal(|| Option::<Project>::None);
-    let mut open_tabs: Signal<Vec<DocRef>> = use_signal(Vec::new);
-    let mut active_tab: Signal<Option<DocRef>> = use_signal(|| None);
+    let project = use_signal(|| Option::<Project>::None);
+    let open_tabs: Signal<Vec<DocRef>> = use_signal(Vec::new);
+    let active_tab: Signal<Option<DocRef>> = use_signal(|| None);
     let mut tab_content: Signal<HashMap<DocRef, String>> = use_signal(HashMap::new);
 
     let content = use_signal(|| String::new());
-    let mut other_files_total = use_signal(|| 0usize);
+    let other_files_total = use_signal(|| 0usize);
     let mut daily_progress = use_signal(|| 0usize);
 
     use_effect(move || {
@@ -122,13 +122,13 @@ pub fn App() -> Element {
 
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
-    let mut rename_dialog_visible = use_signal(|| false);
+    let rename_dialog_visible = use_signal(|| false);
     let mut export_dialog_visible = use_signal(|| false);
-    let mut rename_target = use_signal(|| (String::new(), String::new()));
+    let rename_target = use_signal(|| (String::new(), String::new()));
     let mut save_notification = use_signal(|| Option::<String>::None);
-    let mut is_saved = use_signal(|| true);
+    let is_saved = use_signal(|| true);
     let mut global_settings = use_signal(|| fs::settings::load_global_settings());
-    let mut is_dark = use_memo(move || global_settings.read().theme_dark);
+    let is_dark = use_memo(move || global_settings.read().theme_dark);
     let auto_save_enabled = use_memo(move || global_settings.read().auto_save);
     let font_size = use_memo(move || global_settings.read().font_size);
     
@@ -137,17 +137,17 @@ pub fn App() -> Element {
     #[cfg(not(target_os = "android"))]
     let desktop = use_window();
 
-    let mut pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
-    let mut settings_visible = use_signal(|| false);
-    let mut project_name = use_signal(|| String::new());
-    let mut project_settings = use_signal(|| ProjectSettings::default());
-    let mut chapter_version = use_signal(|| 0u32);
+    let pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
+    let settings_visible = use_signal(|| false);
+    let project_name = use_signal(|| String::new());
+    let project_settings = use_signal(|| ProjectSettings::default());
+    let chapter_version = use_signal(|| 0u32);
     let mut show_sidebar = use_signal(|| true);
     let mut show_editor = use_signal(|| true);
     let mut show_preview = use_signal(|| true);
     let mut focus_mode = use_signal(|| false);
 
-    let mut activity_tab = use_signal(|| ActivityTab::Explorer);
+    let activity_tab = use_signal(|| ActivityTab::Explorer);
 
 
     let writing_mode_str = use_memo(move || match *writing_mode.read() {
@@ -335,7 +335,7 @@ pub fn App() -> Element {
     }
     // ── Helpers ──
 
-    let mut switch_to_doc = {
+    let switch_to_doc = {
         let mut active_tab = active_tab.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
@@ -682,7 +682,7 @@ pub fn App() -> Element {
 
     let mut on_confirm_rename = {
         let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
+        let _save_notification = save_notification.clone();
         let mut chapter_version = chapter_version.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
@@ -747,7 +747,7 @@ pub fn App() -> Element {
                         .find(|c| c.dir_name == chapter_dir)
                         .map(|c| c.title.clone())
                         .unwrap_or_default();
-                    let doc = DocRef::Tale {
+                    let _doc = DocRef::Tale {
                         chapter_dir: chapter_dir.clone(),
                         tale_file: entry.file_name.clone(),
                         chapter_title: ch_title,
@@ -785,7 +785,7 @@ pub fn App() -> Element {
     // Modified on_confirm_rename to handle tale format
     let on_confirm_rename_tale = {
         let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
+        let _save_notification = save_notification.clone();
         let mut chapter_version = chapter_version.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
@@ -851,7 +851,7 @@ pub fn App() -> Element {
 
     let on_add_material = {
         let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
+        let _save_notification = save_notification.clone();
         let mut chapter_version = chapter_version.clone();
         move |(title, category): (String, crate::model::MaterialCategory)| {
             let mut proj = project.write();
@@ -1002,7 +1002,7 @@ pub fn App() -> Element {
 
     let on_confirm_rename_material = {
         let mut project = project.clone();
-        let mut save_notification = save_notification.clone();
+        let _save_notification = save_notification.clone();
         let mut chapter_version = chapter_version.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
@@ -1077,7 +1077,7 @@ pub fn App() -> Element {
     let auto_save = auto_save_enabled.clone();
     let mut last_tc = use_signal(|| String::new());
     let mut save_gen: Signal<u64> = use_signal(|| 0);
-    let mut proj = project.clone();
+    let proj = project.clone();
     use_effect(move || {
         let doc = active_tab.read().clone();
         let cur = doc.as_ref()

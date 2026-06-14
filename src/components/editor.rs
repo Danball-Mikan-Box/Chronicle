@@ -81,7 +81,7 @@ pub fn Editor(
     focus_mode: Signal<bool>,
     placeholder: String,
 ) -> Element {
-    let mut is_composing = use_signal(|| false);
+    let is_composing = use_signal(|| false);
 
     let settings = project.read().as_ref().map(|p| p.settings.clone()).unwrap_or_default();
     let gs = global_settings.read();

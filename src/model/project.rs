@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -164,10 +163,6 @@ impl Project {
 
     // ── Paths ──
 
-    pub fn chapter_dir(&self, dir_name: &str) -> PathBuf {
-        self.root_dir.join("chapters").join(dir_name)
-    }
-
     pub fn tale_path(&self, chapter_dir: &str, file_name: &str) -> PathBuf {
         self.root_dir.join("chapters").join(chapter_dir).join(file_name)
     }
@@ -321,15 +316,6 @@ pub enum DocRef {
 }
 
 impl DocRef {
-    pub fn tab_label(&self) -> String {
-        match self {
-            DocRef::Tale { chapter_title, tale_title, .. } => {
-                format!("{} / {}", chapter_title, tale_title)
-            }
-            DocRef::Material { title, .. } => title.clone(),
-        }
-    }
-
     pub fn short_label(&self) -> String {
         match self {
             DocRef::Tale { tale_title, .. } => tale_title.clone(),
@@ -338,13 +324,7 @@ impl DocRef {
     }
 }
 
-/// Open-tab state, not serialised with the project.
-#[derive(Debug, Clone)]
-pub struct TabState {
-    pub open_tabs: Vec<DocRef>,
-    pub active_tab: DocRef,
-    pub tab_content: HashMap<DocRef, String>,
-}
+
 
 impl Default for ProjectSettings {
     fn default() -> Self {
