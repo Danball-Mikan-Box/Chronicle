@@ -2,6 +2,8 @@
 // Copyright 2021-2023 Tauri Programme within The Commons Conservancy
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(deprecated, dead_code, non_snake_case, unused_must_use)]
+
 //! Tao is a cross-platform application window creation and event loop management library.
 //!
 //! # Building windows

@@ -41,6 +41,7 @@ jobs:
             libgdk-pixbuf-2.0-dev \
             libglib2.0-dev \
             librsvg2-dev \
+            libxdo-dev \
             rpm \
             file
 
@@ -103,6 +104,7 @@ jobs:
             libpango1.0-dev \
             libgdk-pixbuf-2.0-dev \
             libglib2.0-dev \
+            libxdo-dev \
             rpm \
             file
 
@@ -155,6 +157,7 @@ jobs:
             libgdk-pixbuf-2.0-dev \
             libglib2.0-dev \
             librsvg2-dev \
+            libxdo-dev \
             file
 
       - name: Build release
