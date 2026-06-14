@@ -13,10 +13,11 @@ mod styles;
 fn launch_desktop() {
     let icon = {
         let img = image::load_from_memory(include_bytes!("../Chronicle.png"))
-            .expect("Failed to load icon")
-            .to_rgba8();
-        let (w, h) = img.dimensions();
-        dioxus_desktop::tao::window::Icon::from_rgba(img.into_raw(), w, h)
+            .expect("Failed to load icon");
+        let small = img.resize_exact(64, 64, image::imageops::FilterType::Lanczos3);
+        let rgba = small.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        dioxus_desktop::tao::window::Icon::from_rgba(rgba.into_raw(), w, h)
             .expect("Failed to create icon")
     };
 

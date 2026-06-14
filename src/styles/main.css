@@ -680,8 +680,10 @@ input, textarea, button {
 .preview.vertical {
     writing-mode: vertical-rl;
     text-orientation: upright;
-    line-height: 2.4;
-    letter-spacing: 0.25em;
+    text-transform: full-width;
+    font-variant-numeric: tabular-nums;
+    line-height: 2;
+    letter-spacing: 0;
     height: 100%;
     padding: 40px;
     box-sizing: border-box;
@@ -1348,6 +1350,34 @@ input[type="range"] {
 .sidebar-del-btn:hover {
     background: var(--bg-hover);
     color: #c04040;
+}
+
+/* ── Sidebar rename button ── */
+.sidebar-rename-btn {
+    opacity: 0;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.chapter-header:hover .sidebar-rename-btn,
+.tale-content:hover .sidebar-rename-btn,
+.material-item:hover .sidebar-rename-btn {
+    opacity: 1;
+}
+
+.sidebar-rename-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
 }
 
 .sidebar-sub-action {

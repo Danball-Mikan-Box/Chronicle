@@ -437,62 +437,25 @@ pub fn App() -> Element {
         let proj = project.read().clone();
         if let Some(ref proj) = proj {
             let default_name = match format {
-                ExportFormat::ProjectZip => format!("{}_flaxia.zip", proj.name),
-                ExportFormat::ManuscriptSingleTxt => "全話.txt".to_string(),
-                ExportFormat::ManuscriptSingleHtml => "全話.html".to_string(),
+                ExportFormat::ProjectZip => format!("{}-backup.zip", proj.name),
                 ExportFormat::ManuscriptZipTxt => "原稿_テキスト.zip".to_string(),
                 ExportFormat::ManuscriptZipHtml => "原稿_HTML.zip".to_string(),
-                ExportFormat::CurrentFileTxt => {
-                    active_tab.read().as_ref()
-                        .map(|d| d.short_label().replace(".md", ".txt"))
-                        .unwrap_or_else(|| "出力.txt".to_string())
-                }
-                ExportFormat::CurrentFileHtml => {
-                    active_tab.read().as_ref()
-                        .map(|d| d.short_label().replace(".md", ".html"))
-                        .unwrap_or_else(|| "出力.html".to_string())
-                }
                 ExportFormat::SiteZip => "site.zip".to_string(),
             };
 
-            let mut dialog = rfd::FileDialog::new()
+            let dialog = rfd::FileDialog::new()
                 .set_title("エクスポート先を選択")
                 .set_file_name(&default_name);
             
-            let path = match format {
-                ExportFormat::ProjectZip | ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml | ExportFormat::SiteZip => {
-                    dialog.add_filter("ZIP Archive", &["zip"]).save_file()
-                }
-                ExportFormat::ManuscriptSingleTxt | ExportFormat::CurrentFileTxt => {
-                    dialog.add_filter("Text File", &["txt", "md"]).save_file()
-                }
-                ExportFormat::ManuscriptSingleHtml | ExportFormat::CurrentFileHtml => {
-                    dialog.add_filter("HTML File", &["html"]).save_file()
-                }
-            };
+            let path = dialog.add_filter("ZIP Archive", &["zip"]).save_file();
 
             if let Some(path) = path {
                 let res = match format {
                     ExportFormat::ProjectZip => crate::export::export_project_zip(proj, &path),
-                    ExportFormat::ManuscriptSingleTxt | ExportFormat::ManuscriptSingleHtml => {
-                        crate::export::export_manuscript_single(proj, format, &path)
-                    }
                     ExportFormat::ManuscriptZipTxt | ExportFormat::ManuscriptZipHtml => {
                         crate::export::export_manuscript_zip(proj, format, &path)
                     }
                     ExportFormat::SiteZip => crate::export::export_site_zip(proj, &path),
-                    ExportFormat::CurrentFileTxt | ExportFormat::CurrentFileHtml => {
-                        if let Some(doc) = active_tab.read().as_ref() {
-                            if let Some(text) = tab_content.read().get(doc) {
-                                crate::export::export_current_file(proj, format, doc, text, &path)
-                            } else {
-                                Err("ドキュメントの内容が読み込めません".to_string())
-                            }
-                        } else {
-                            Err("開いている話がありません".to_string())
-                        }
-                    }
-                    ,
                 };
 
                 match res {
@@ -594,6 +557,21 @@ pub fn App() -> Element {
         let mut gs = global_settings.write();
         if gs.font_size > 8 { gs.font_size -= 1; }
         let _ = fs::settings::save_global_settings(&gs);
+    };
+
+    let on_close_project = {
+        let mut project = project.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut active_tab = active_tab.clone();
+        let mut content_sig = content.clone();
+        let mut is_saved = is_saved.clone();
+        move |_| {
+            project.set(None);
+            open_tabs.set(Vec::new());
+            active_tab.set(None);
+            content_sig.set(String::new());
+            is_saved.set(true);
+        }
     };
 
     let on_settings = {
@@ -1117,6 +1095,7 @@ let auto_save = auto_save_enabled.clone();
                 project: project,
                 on_new_project: on_new_project,
                 on_open_project: on_open_project,
+                on_close_project: on_close_project,
                 on_save: on_save,
                 on_export: on_export,
                 on_toggle_dark: on_toggle_dark,

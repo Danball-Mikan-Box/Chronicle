@@ -71,19 +71,15 @@ pub fn ExportDialog(
         return Ok(VNode::placeholder());
     }
 
+    let mut show_split_choice = use_signal(|| false);
+
     let close = move |_| visible.set(false);
     let on_keydown = move |e: Event<KeyboardData>| {
         if e.key() == Key::Escape { visible.set(false); }
     };
 
     let formats = [
-        (ExportFormat::ProjectZip, "プロジェクト丸ごと (ZIP)", "プロジェクトの全ファイルをZIPに圧縮して出力します。バックアップに最適です。"),
-        (ExportFormat::ManuscriptSingleTxt, "全話を1つのファイルに (テキスト)", "全ての章と話を1つのテキストファイルにまとめて出力します。"),
-        (ExportFormat::ManuscriptSingleHtml, "全話を1つのファイルに (HTML)", "全ての章と話を1つのHTMLファイルにまとめて出力します。ブラウザで閲覧可能です。"),
-        (ExportFormat::ManuscriptZipTxt, "章・話ごとに分ける (ZIP/テキスト)", "章ごとにフォルダを分け、各話をテキストファイルとしてZIPにまとめます。"),
-        (ExportFormat::ManuscriptZipHtml, "章・話ごとに分ける (ZIP/HTML)", "章ごとにフォルダを分け、各話をHTMLファイルとしてZIPにまとめます。"),
-        (ExportFormat::CurrentFileTxt, "現在の編集中の話のみ (テキスト)", "現在開いている話のみをテキストファイルとして出力します。"),
-        (ExportFormat::CurrentFileHtml, "現在の編集中の話のみ (HTML)", "現在開いている話のみをHTMLファイルとして出力します。"),
+        (ExportFormat::ProjectZip, "プロジェクト丸ごと (ZIP)", "プロジェクトの全ファイルをZIPに圧縮して出力します。バックアップに最適です。ファイル名は -backup.zip になります。"),
         (ExportFormat::SiteZip, "サイト出力（ZIP）", "HTML サイト形式で出力し、index.html が含まれます。"),
     ];
 
@@ -105,6 +101,12 @@ pub fn ExportDialog(
                                 p { "{desc}" }
                             }
                         }
+                        div {
+                            class: "export-format-item",
+                            onclick: move |_| show_split_choice.set(true),
+                            h3 { "章・話ごとに分ける (ZIP)" }
+                            p { "章ごとにフォルダを分け、各話をファイルとしてZIPにまとめます。テキスト/HTMLを選択。" }
+                        }
                     }
                 }
                 div { class: "dialog-actions",
@@ -112,6 +114,37 @@ pub fn ExportDialog(
                         class: "dialog-btn",
                         onclick: close,
                         "キャンセル"
+                    }
+                }
+            }
+        }
+
+        if *show_split_choice.read() {
+            div { class: "dialog-overlay", onclick: move |_| show_split_choice.set(false),
+                div { class: "dialog", onclick: |e| e.stop_propagation(),
+                    h2 { "出力形式を選択" }
+                    div { class: "dialog-body", style: "display: flex; justify-content: center; gap: 1rem; padding: 1rem;",
+                        button {
+                            class: "dialog-btn primary",
+                            onclick: move |_| {
+                                on_export.call(ExportFormat::ManuscriptZipTxt);
+                                visible.set(false);
+                                show_split_choice.set(false);
+                            },
+                            "テキスト (.txt)"
+                        }
+                        button {
+                            class: "dialog-btn primary",
+                            onclick: move |_| {
+                                on_export.call(ExportFormat::ManuscriptZipHtml);
+                                visible.set(false);
+                                show_split_choice.set(false);
+                            },
+                            "HTML (.html)"
+                        }
+                    }
+                    div { class: "dialog-actions",
+                        button { class: "dialog-btn", onclick: move |_| show_split_choice.set(false), "キャンセル" }
                     }
                 }
             }

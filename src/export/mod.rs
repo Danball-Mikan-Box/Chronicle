@@ -7,12 +7,8 @@ use crate::model::project::Project;
 #[derive(Debug, Clone)]
 pub enum ExportFormat {
     ProjectZip,
-    ManuscriptSingleTxt,
-    ManuscriptSingleHtml,
     ManuscriptZipTxt,
     ManuscriptZipHtml,
-    CurrentFileTxt,
-    CurrentFileHtml,
     SiteZip,
 }
 
@@ -110,41 +106,7 @@ let index_html = format!(
 
 
 
-pub fn export_manuscript_single(
-    project: &Project,
-    format: ExportFormat,
-    output_path: &Path,
-) -> Result<(), String> {
-    let mut content = String::new();
-    
-    for (i, ch) in project.chapters.iter().enumerate() {
-        if i > 0 { content.push_str("\n\n---\n\n"); }
-        content.push_str(&format!("# {}\n\n", ch.title));
-        
-        for (j, tale) in ch.tales.iter().enumerate() {
-            if j > 0 { content.push_str("\n\n"); }
-            let tale_content = crate::fs::chapter::load_tale(project, &ch.dir_name, &tale.file_name)?;
-            content.push_str(&format!("## {}\n\n", tale.title));
-            content.push_str(&tale_content);
-        }
-    }
 
-    match format {
-        ExportFormat::ManuscriptSingleTxt => {
-            fs::write(output_path, content).map_err(|e| e.to_string())?;
-        }
-        ExportFormat::ManuscriptSingleHtml => {
-            let html_body = crate::markdown::renderer::render_to_html(&content);
-            let html = format!(
-                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;font-family:sans-serif;}}</style></head><body>{}</body></html>",
-                project.name, html_body
-            );
-            fs::write(output_path, html).map_err(|e| e.to_string())?;
-        }
-        _ => return Err("Invalid format for single file export".to_string()),
-    }
-    Ok(())
-}
 
 pub fn export_manuscript_zip(
     project: &Project,
@@ -174,7 +136,7 @@ pub fn export_manuscript_zip(
                     );
                     (tale.file_name.replace(".md", ".html"), html)
                 }
-                _ => continue,
+                _ => unreachable!(),
             };
             
             let path_in_zip = format!("{}/{}", ch_dir, file_name);
@@ -187,27 +149,4 @@ pub fn export_manuscript_zip(
     Ok(())
 }
 
-pub fn export_current_file(
-    _project: &Project,
-    format: ExportFormat,
-    doc_ref: &crate::model::DocRef,
-    content: &str,
-    output_path: &Path,
-) -> Result<(), String> {
-    match format {
-        ExportFormat::CurrentFileTxt => {
-            fs::write(output_path, content).map_err(|e| e.to_string())?;
-        }
-        ExportFormat::CurrentFileHtml => {
-            let title = doc_ref.tab_label();
-            let html_body = crate::markdown::renderer::render_to_html(content);
-            let html = format!(
-                "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>{}</title><style>body{{max-width:800px;margin:2em auto;padding:0 1em;line-height:1.6;font-family:sans-serif;}}</style></head><body><h1>{}</h1>{}</body></html>",
-                title, title, html_body
-            );
-            fs::write(output_path, html).map_err(|e| e.to_string())?;
-        }
-        _ => return Err("Invalid format for current file export".to_string()),
-    }
-    Ok(())
-}
+

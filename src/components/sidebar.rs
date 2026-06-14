@@ -56,6 +56,9 @@ pub fn Sidebar(
                                 let ch_title = ch.title.clone();
                                 let ch_dir_del = ch_dir.clone();
                                 let ch_dir_ren = ch_dir.clone();
+                                let ch_dir_ren_dbl = ch_dir.clone();
+                                let ch_title_ren = ch_title.clone();
+                                let ch_title_ren_dbl = ch_title.clone();
                                 let ch_dir_tale = ch_dir.clone();
                                 let is_ch_active = matches!(&*active_tab.read(), Some(DocRef::Tale { chapter_dir, .. }) if *chapter_dir == ch_dir);
                                 let expanded = use_signal(|| true);
@@ -95,8 +98,14 @@ pub fn Sidebar(
                                             span {
                                                 class: "chapter-title",
                                                 onclick: on_click_ch,
-                                                ondoubleclick: move |_| on_rename_chapter.call((ch_dir_ren.clone(), ch_title.clone())),
+                                                ondoubleclick: move |_| on_rename_chapter.call((ch_dir_ren_dbl.clone(), ch_title_ren_dbl.clone())),
                                                 "{ch.title}"
+                                            }
+                                            button {
+                                                class: "sidebar-rename-btn",
+                                                title: "章名を変更",
+                                                onclick: move |_| on_rename_chapter.call((ch_dir_ren.clone(), ch_title_ren.clone())),
+                                                "\u{270E}"
                                             }
                                             button {
                                                 class: "sidebar-del-btn",
@@ -142,7 +151,14 @@ pub fn Sidebar(
                                                         }
                                                     };
 
-                                                    let on_ren = {
+                                                    let on_ren_dbl = {
+                                                        let on_rename_tale = on_rename_tale.clone();
+                                                        let ch_dir = ch_dir.clone();
+                                                        let old_file = tale.file_name.clone();
+                                                        let title = tale.title.clone();
+                                                        move |_| on_rename_tale.call((ch_dir.clone(), old_file.clone(), title.clone()))
+                                                    };
+                                                    let on_ren_btn = {
                                                         let on_rename_tale = on_rename_tale.clone();
                                                         let ch_dir = ch_dir.clone();
                                                         let old_file = tale.file_name.clone();
@@ -157,8 +173,14 @@ pub fn Sidebar(
                                                                 span {
                                                                     class: "tale-title",
                                                                     onclick: on_open,
-                                                                    ondoubleclick: on_ren,
+                                                                    ondoubleclick: on_ren_dbl,
                                                                     "{tale.title}"
+                                                                }
+                                                                button {
+                                                                    class: "sidebar-rename-btn",
+                                                                    title: "話名を変更",
+                                                                    onclick: on_ren_btn,
+                                                                    "\u{270E}"
                                                                 }
                                                                 button {
                                                                     class: "sidebar-del-btn",
@@ -241,7 +263,13 @@ pub fn Sidebar(
                                     }
                                 };
 
-                                let on_ren = {
+                                let on_ren_dbl = {
+                                    let on_rename_material = on_rename_material.clone();
+                                    let m_file = m_file.clone();
+                                    let m_title = m_title.clone();
+                                    move |_| on_rename_material.call((m_file.clone(), m_title.clone()))
+                                };
+                                let on_ren_btn = {
                                     let on_rename_material = on_rename_material.clone();
                                     let m_file = m_file.clone();
                                     let m_title = m_title.clone();
@@ -256,8 +284,14 @@ pub fn Sidebar(
                                             span {
                                                 class: "material-title",
                                                 onclick: on_open,
-                                                ondoubleclick: on_ren,
+                                                ondoubleclick: on_ren_dbl,
                                                 "{mat.title}"
+                                            }
+                                            button {
+                                                class: "sidebar-rename-btn",
+                                                title: "資料名を変更",
+                                                onclick: on_ren_btn,
+                                                "\u{270E}"
                                             }
                                             button {
                                                 class: "sidebar-del-btn",

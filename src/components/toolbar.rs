@@ -11,6 +11,7 @@ pub fn Toolbar(
     project: Signal<Option<Project>>,
     on_new_project: EventHandler<()>,
     on_open_project: EventHandler<()>,
+    on_close_project: EventHandler<()>,
     on_save: EventHandler<()>,
     on_export: EventHandler<()>,
     on_toggle_dark: EventHandler<()>,
@@ -97,6 +98,7 @@ pub fn Toolbar(
             div { class: "toolbar-center",
                 button { class: "toolbar-btn", onclick: move |_| on_new_project.call(()), "新規" }
                 button { class: "toolbar-btn", onclick: move |_| on_open_project.call(()), "開く" }
+                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_close_project.call(()), "閉じる" }
                 button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_save.call(()), "保存" }
                 button { class: "toolbar-btn", onclick: move |_| on_settings.call(()), "設定" }
                 span { class: "separator" }
