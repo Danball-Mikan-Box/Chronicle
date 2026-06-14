@@ -1,0 +1,14 @@
+[application]
+name = "Chronicle"
+version = "0.1.0"
+
+[web.app]
+title = "Chronicle"
+base_path = "/"
+base_url = ""
+
+[android]
+apk_name = "Chronicle"
+
+[android.app]
+package = "com.chronicle.app"

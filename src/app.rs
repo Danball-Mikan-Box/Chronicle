@@ -1,4 +1,7 @@
+#[cfg(target_os = "android")]
+use dioxus::document::eval;
 use dioxus::prelude::*;
+#[cfg(not(target_os = "android"))]
 use dioxus_desktop::use_window;
 use std::collections::HashMap;
 
@@ -130,6 +133,8 @@ pub fn App() -> Element {
     let font_size = use_memo(move || global_settings.read().font_size);
     
     let recent_projects = use_signal(|| load_recent());
+
+    #[cfg(not(target_os = "android"))]
     let desktop = use_window();
 
     let mut pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
@@ -557,7 +562,9 @@ pub fn App() -> Element {
         do_save_current();
     };
 
+    #[cfg(not(target_os = "android"))]
     let desktop_apply_visibility = desktop.clone();
+    #[cfg(not(target_os = "android"))]
     let desktop_toggle_dark = desktop.clone();
     let on_toggle_dark = move |_| {
         let mut gs = global_settings.write();
@@ -568,7 +575,10 @@ pub fn App() -> Element {
         } else {
             "document.documentElement.classList.remove('dark')"
         };
+        #[cfg(not(target_os = "android"))]
         let _ = desktop_toggle_dark.webview.evaluate_script(js);
+        #[cfg(target_os = "android")]
+        let _ = eval(js);
     };
 
     let on_toggle_sidebar = move |_| { let v = !*show_sidebar.read(); show_sidebar.set(v); };
@@ -1042,7 +1052,8 @@ pub fn App() -> Element {
         }
     };
 
-    // ── Recalculate panel widths on toggle ──
+    // ── Recalculate panel widths on toggle (desktop only) ──
+    #[cfg(not(target_os = "android"))]
     use_effect(use_reactive(&(show_sidebar, show_editor, show_preview), move |_| {
         let _ = desktop_apply_visibility.webview.evaluate_script("if(window.__chronicle_apply) window.__chronicle_apply();");
     }));

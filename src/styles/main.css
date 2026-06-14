@@ -1595,3 +1595,113 @@ input[type="range"] {
     color: var(--text-muted);
     border-top: 1px solid var(--border-light);
 }
+
+/* ── Mobile / Small-screen layout ── */
+@media (max-width: 768px) {
+    .titlebar { display: none !important }
+
+    .toolbar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 4px 8px;
+        gap: 2px;
+    }
+    .toolbar h1 { font-size: 14px; margin-right: 4px }
+    .toolbar .project-name { font-size: 11px; max-width: 100px; overflow: hidden; text-overflow: ellipsis }
+    .toolbar-btn { font-size: 11px; padding: 4px 6px }
+    .toolbar .separator { margin: 0 2px }
+    .toolbar-center { flex-wrap: nowrap; overflow-x: auto; gap: 2px }
+    .toolbar-right { display: none }
+
+    .main-content {
+        flex-direction: column !important;
+        overflow: auto;
+    }
+    .main-content.preview-bottom { flex-direction: column !important }
+
+    .main-content .sidebar {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
+        max-height: 40vh;
+        overflow-y: auto;
+        border-right: none !important;
+        border-bottom: 1px solid var(--sidebar-border);
+    }
+    .main-content.sidebar-right .sidebar {
+        border-left: none !important;
+        border-bottom: 1px solid var(--sidebar-border);
+    }
+
+    .resize-handle { display: none !important }
+
+    .editor-pane {
+        flex: 1 1 auto !important;
+        min-height: 200px;
+    }
+    .editor {
+        padding: 8px 12px;
+        font-size: 16px;
+    }
+    .formatting-bar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 2px;
+        padding: 4px 8px;
+    }
+    .formatting-bar button { font-size: 11px; padding: 4px 6px }
+
+    .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch }
+    .tab { font-size: 12px; padding: 6px 10px }
+
+    .preview-pane {
+        width: 100% !important;
+        flex: 0 0 auto !important;
+        max-height: 50vh;
+        border-left: none !important;
+        border-top: 1px solid var(--border);
+    }
+    .preview {
+        padding: 8px 12px;
+        font-size: 15px;
+    }
+    .main-content.preview-bottom .preview-pane {
+        max-height: 40vh;
+    }
+
+    .status-bar {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+
+    .stats { gap: 4px }
+    .stat-item { min-width: auto }
+    .stat-value { font-size: 12px }
+    .stat-label { font-size: 9px }
+    .progress-bar-container { height: 3px }
+
+    .dialog { width: 90vw !important; max-width: 360px }
+    .dialog-wide { width: 90vw !important; max-width: 420px }
+
+    .dialog-body { padding: 12px }
+    .dialog-input { font-size: 14px }
+
+    .welcome h1 { font-size: 24px }
+    .welcome p { font-size: 14px }
+}
+
+@media (max-width: 480px) {
+    .sidebar { max-height: 30vh }
+    .preview-pane { max-height: 40vh }
+    .toolbar-center .separator { display: none }
+    .toolbar .toolbar-right { display: none }
+    .toolbar-btn { font-size: 10px; padding: 3px 4px }
+    .tab { font-size: 11px; padding: 4px 8px }
+}
+
+/* ── Safe area for mobile notches ── */
+@supports (padding: env(safe-area-inset-top)) {
+    .app { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom) }
+}

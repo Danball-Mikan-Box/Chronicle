@@ -1,6 +1,5 @@
 use dioxus::document::eval;
 use dioxus::prelude::*;
-use dioxus_desktop::use_window;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -82,7 +81,6 @@ pub fn Editor(
     focus_mode: Signal<bool>,
     placeholder: String,
 ) -> Element {
-    let desktop = use_window();
     let mut is_composing = use_signal(|| false);
 
     let settings = project.read().as_ref().map(|p| p.settings.clone()).unwrap_or_default();
@@ -183,13 +181,12 @@ pub fn Editor(
 
     let on_keydown = {
         let do_format = do_format.clone();
-        let desktop_ed = desktop.clone();
         let content_kd = content.clone();
         move |evt: Event<KeyboardData>| {
             if evt.is_composing() { return; }
             match evt.key() {
                 Key::Escape => {
-                    let _ = desktop_ed.webview.evaluate_script("document.querySelector('.editor').blur();");
+                    let _ = eval("document.querySelector('.editor').blur();");
                     return;
                 }
                 Key::Character(c) if evt.modifiers().contains(Modifiers::CONTROL) => {

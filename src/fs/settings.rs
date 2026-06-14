@@ -3,15 +3,28 @@ use std::path::PathBuf;
 use crate::model::project::GlobalSettings;
 
 fn get_settings_path() -> PathBuf {
-    let config_dir = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            PathBuf::from(home).join(".config")
-        });
-    let app_dir = config_dir.join("chronicle");
-    let _ = std::fs::create_dir_all(&app_dir);
-    app_dir.join("settings.json")
+    #[cfg(target_os = "android")]
+    {
+        // On Android, use the app's internal data directory
+        let data_dir = std::env::var("CHRONICLE_DATA_DIR")
+            .unwrap_or_else(|_| "/data/data/com.chronicle.app/files".to_string());
+        let app_dir = PathBuf::from(data_dir);
+        let _ = std::fs::create_dir_all(&app_dir);
+        app_dir.join("settings.json")
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let config_dir = std::env::var("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                PathBuf::from(home).join(".config")
+            });
+        let app_dir = config_dir.join("chronicle");
+        let _ = std::fs::create_dir_all(&app_dir);
+        app_dir.join("settings.json")
+    }
 }
 
 pub fn save_global_settings(settings: &GlobalSettings) -> Result<(), String> {

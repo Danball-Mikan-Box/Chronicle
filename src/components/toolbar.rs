@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+#[cfg(not(target_os = "android"))]
 use dioxus_desktop::use_window;
 
 use crate::model::project::{Project, WritingMode};
@@ -50,7 +51,8 @@ pub fn Toolbar(
     };
 
     // Desktop title bar – only compiled for non‑Android targets
-    let titlebar = if cfg!(not(target_os = "android")) {
+    #[cfg(not(target_os = "android"))]
+    let titlebar = {
         let desktop = use_window();
         let min_btn = desktop.clone();
         let max_btn = desktop.clone();
@@ -82,9 +84,9 @@ pub fn Toolbar(
                 }
             }
         }
-    } else {
-        rsx! {}
     };
+    #[cfg(target_os = "android")]
+    let titlebar = rsx! {};
 
     rsx! {
         {titlebar}
