@@ -462,6 +462,9 @@ pub fn App() -> Element {
                 ExportFormat::ManuscriptZipTxt => "原稿_テキスト.zip".to_string(),
                 ExportFormat::ManuscriptZipHtml => "原稿_HTML.zip".to_string(),
                 ExportFormat::SiteZip => "site.zip".to_string(),
+                ExportFormat::NarouZip => "なろう投稿用.zip".to_string(),
+                ExportFormat::KakuyomuZip => "カクヨム投稿用.zip".to_string(),
+                ExportFormat::HamelnZip => "ハーメルン投稿用.zip".to_string(),
             };
 
             let dialog = rfd::FileDialog::new()
@@ -477,6 +480,9 @@ pub fn App() -> Element {
                         crate::export::export_manuscript_zip(proj, format, &path)
                     }
                     ExportFormat::SiteZip => crate::export::export_site_zip(proj, &path),
+                    ExportFormat::NarouZip => crate::export::export_platform_zip(proj, "narou", &path),
+                    ExportFormat::KakuyomuZip => crate::export::export_platform_zip(proj, "kakuyomu", &path),
+                    ExportFormat::HamelnZip => crate::export::export_platform_zip(proj, "hameln", &path),
                 };
 
                 match res {

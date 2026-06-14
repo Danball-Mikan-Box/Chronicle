@@ -10,6 +10,9 @@ pub enum ExportFormat {
     ManuscriptZipTxt,
     ManuscriptZipHtml,
     SiteZip,
+    NarouZip,
+    KakuyomuZip,
+    HamelnZip,
 }
 
 pub fn export_project_zip(project: &Project, output_path: &Path) -> Result<(), String> {
@@ -418,6 +421,114 @@ pub fn export_manuscript_zip(
             let path_in_zip = format!("{}/{}", ch_dir, file_name);
             zip.start_file(path_in_zip, options).map_err(|e| e.to_string())?;
             zip.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+        }
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn to_platform_text(text: &str, platform: &str) -> String {
+    let mut result = String::new();
+    let mut rest = text;
+
+    while let Some(pos) = rest.find('{') {
+        result.push_str(&rest[..pos]);
+        rest = &rest[pos + 1..];
+
+        if let Some(end) = rest.find('}') {
+            let inner = &rest[..end];
+            if let Some(pipe) = inner.find('|') {
+                let base = inner[..pipe].trim();
+                let ruby = inner[pipe + 1..].trim();
+                match platform {
+                    "narou" => result.push_str(&format!("｜{base}《{ruby}》")),
+                    "kakuyomu" => result.push_str(&format!("{base}《{ruby}》")),
+                    "hameln" => result.push_str(&format!("|{base}《{ruby}》")),
+                    _ => result.push_str(&format!("{base}《{ruby}》")),
+                }
+            } else {
+                result.push('{');
+                result.push_str(inner);
+                result.push('}');
+            }
+            rest = &rest[end + 1..];
+        } else {
+            result.push('{');
+            result.push_str(rest);
+            rest = "";
+        }
+    }
+    result.push_str(rest);
+    result
+}
+
+fn strip_markdown_links(text: &str) -> String {
+    let mut result = String::new();
+    let mut rest = text;
+
+    while let Some(pos) = rest.find('[') {
+        result.push_str(&rest[..pos]);
+        rest = &rest[pos + 1..];
+
+        let mut depth = 1u32;
+        let mut link_text = String::new();
+        for (i, ch) in rest.char_indices() {
+            match ch {
+                '[' => depth += 1,
+                ']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        link_text = rest[..i].to_string();
+                        rest = &rest[i + 1..];
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if depth != 0 {
+            result.push('[');
+            result.push_str(rest);
+            rest = "";
+        } else if rest.starts_with('(') {
+            if let Some(end) = rest.find(')') {
+                rest = &rest[end + 1..];
+            }
+            result.push_str(&link_text);
+        } else {
+            result.push('[');
+            result.push_str(&link_text);
+            result.push(']');
+        }
+    }
+    result.push_str(rest);
+    result
+}
+
+pub fn export_platform_zip(
+    project: &Project,
+    platform: &str,
+    output_path: &Path,
+) -> Result<(), String> {
+    let file = fs::File::create(output_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    for ch in &project.chapters {
+        let ch_dir = &ch.dir_name;
+        zip.add_directory(ch_dir, options).map_err(|e| e.to_string())?;
+
+        for tale in &ch.tales {
+            let tale_content = crate::fs::chapter::load_tale(project, &ch.dir_name, &tale.file_name)?;
+            let text = to_platform_text(&tale_content, platform);
+            let text = strip_markdown_links(&text);
+            let file_name = tale.file_name.replace(".md", ".txt");
+
+            let path_in_zip = format!("{}/{}", ch_dir, file_name);
+            zip.start_file(path_in_zip, options).map_err(|e| e.to_string())?;
+            zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
         }
     }
 

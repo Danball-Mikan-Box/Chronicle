@@ -72,6 +72,7 @@ pub fn ExportDialog(
     }
 
     let mut show_split_choice = use_signal(|| false);
+    let mut show_platform_choice = use_signal(|| false);
 
     let close = move |_| visible.set(false);
     let on_keydown = move |e: Event<KeyboardData>| {
@@ -80,7 +81,7 @@ pub fn ExportDialog(
 
     let formats = [
         (ExportFormat::ProjectZip, "プロジェクト丸ごと (ZIP)", "プロジェクトの全ファイルをZIPに圧縮して出力します。バックアップに最適です。ファイル名は -backup.zip になります。"),
-        (ExportFormat::SiteZip, "サイト出力（ZIP）", "Flaxiaへの投稿用。HTML サイト形式で出力し、index.html が含まれます。"),
+        (ExportFormat::SiteZip, "サイト出力（ZIP）", "HTML サイト形式で出力し、index.html が含まれます。"),
     ];
 
     rsx! {
@@ -106,6 +107,12 @@ pub fn ExportDialog(
                             onclick: move |_| show_split_choice.set(true),
                             h3 { "章・話ごとに分ける (ZIP)" }
                             p { "章ごとにフォルダを分け、各話をファイルとしてZIPにまとめます。テキスト/HTMLを選択。" }
+                        }
+                        div {
+                            class: "export-format-item",
+                            onclick: move |_| show_platform_choice.set(true),
+                            h3 { "投稿サイト用に出力 (ZIP)" }
+                            p { "各投稿サイトの書式に変換してテキストファイルを出力します。" }
                         }
                     }
                 }
@@ -145,6 +152,46 @@ pub fn ExportDialog(
                     }
                     div { class: "dialog-actions",
                         button { class: "dialog-btn", onclick: move |_| show_split_choice.set(false), "キャンセル" }
+                    }
+                }
+            }
+        }
+
+        if *show_platform_choice.read() {
+            div { class: "dialog-overlay", onclick: move |_| show_platform_choice.set(false),
+                div { class: "dialog", onclick: |e| e.stop_propagation(),
+                    h2 { "投稿サイトを選択" }
+                    div { class: "dialog-body", style: "display: flex; justify-content: center; gap: 1rem; padding: 1rem; flex-wrap: wrap;",
+                        button {
+                            class: "dialog-btn primary",
+                            onclick: move |_| {
+                                on_export.call(ExportFormat::NarouZip);
+                                visible.set(false);
+                                show_platform_choice.set(false);
+                            },
+                            "小説家になろう"
+                        }
+                        button {
+                            class: "dialog-btn primary",
+                            onclick: move |_| {
+                                on_export.call(ExportFormat::KakuyomuZip);
+                                visible.set(false);
+                                show_platform_choice.set(false);
+                            },
+                            "カクヨム"
+                        }
+                        button {
+                            class: "dialog-btn primary",
+                            onclick: move |_| {
+                                on_export.call(ExportFormat::HamelnZip);
+                                visible.set(false);
+                                show_platform_choice.set(false);
+                            },
+                            "ハーメルン"
+                        }
+                    }
+                    div { class: "dialog-actions",
+                        button { class: "dialog-btn", onclick: move |_| show_platform_choice.set(false), "キャンセル" }
                     }
                 }
             }
