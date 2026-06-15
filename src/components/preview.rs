@@ -18,14 +18,10 @@ pub fn Preview(
     let vert_class = if wm == "vertical" { " vertical" } else { "" };
     let indent_class = if settings.indent_paragraphs { " indent-paragraphs" } else { "" };
 
-    let margin = if wm == "vertical" { "margin-left: auto; margin-right: 0;" } else { "margin-left: 0; margin-right: auto;" };
+    let mw = if wm == "vertical" { "none".to_string() } else { gs.max_width.to_string() };
     let style = format!(
-        "font-family: '{}'; font-size: {}px; line-height: {}; max-width: {}px; {}",
-        gs.font_family,
-        gs.font_size,
-        gs.line_height,
-        if wm == "vertical" { "none".to_string() } else { gs.max_width.to_string() },
-        margin
+        "--editor-font-family: '{}'; --editor-font-size: {}px; --editor-line-height: {}; --editor-max-width: {};",
+        gs.font_family, gs.font_size, gs.line_height, mw,
     );
 
     rsx! {

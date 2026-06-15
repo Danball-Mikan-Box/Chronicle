@@ -574,6 +574,7 @@ pub fn SettingsDialog(
                                 font_family: editor_font.read().clone(),
                                 line_height: lh,
                                 max_width: mw,
+                                last_project_path: None,
                             };
 
                             on_save.call((n, settings, g_settings));

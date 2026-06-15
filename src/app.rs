@@ -4,8 +4,17 @@ use dioxus::prelude::*;
 #[cfg(not(target_os = "android"))]
 use dioxus_desktop::use_window;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+
 
 use crate::components::dialog::{ConfirmDialog, ExportDialog, PendingDelete, ProjectDialog, RenameDialog, SettingsDialog};
+
+#[derive(Clone)]
+enum CloseAction {
+    CloseProject,
+    CloseWindow,
+}
 use crate::components::editor::Editor;
 use crate::export::ExportFormat;
 use crate::components::preview::Preview;
@@ -160,10 +169,39 @@ pub fn App() -> Element {
     
     let recent_projects = use_signal(|| load_recent());
 
+    {
+        let mut project = project.clone();
+        let mut recent = recent_projects.clone();
+        let mut other_files_total = other_files_total.clone();
+        let mut initialized = use_signal(|| false);
+        use_effect(move || {
+            let mut init = initialized.write();
+            if *init { return; }
+            *init = true;
+            drop(init);
+            let settings = fs::settings::load_global_settings();
+            if let Some(ref path) = settings.last_project_path {
+                let dir = std::path::Path::new(path);
+                if dir.exists() {
+                    match fs::project::load_project(dir) {
+                        Ok(mut p) => {
+                            handle_daily_stats(&mut p);
+                            push_recent(&mut recent.write(), path.clone());
+                            other_files_total.set(get_other_files_total(&p, &None));
+                            *project.write() = Some(p);
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
+        });
+    }
+
     #[cfg(not(target_os = "android"))]
     let desktop = use_window();
 
     let pending_delete: Signal<Option<PendingDelete>> = use_signal(|| None);
+    let mut close_pending: Signal<Option<CloseAction>> = use_signal(|| None);
     let settings_visible = use_signal(|| false);
     let project_name = use_signal(|| String::new());
     let project_settings = use_signal(|| ProjectSettings::default());
@@ -453,7 +491,6 @@ pub fn App() -> Element {
                 if let Some(text) = tab_content.read().get(&d).cloned() {
                     match save_doc_content(proj, &d, &text) {
                         Ok(_) => {
-                            // Update character count cache
                             if let DocRef::Tale { chapter_dir, tale_file, .. } = &d {
                                 let count = text.chars().filter(|c| !c.is_whitespace()).count();
                                 for ch in &mut proj.chapters {
@@ -478,6 +515,22 @@ pub fn App() -> Element {
                     }
                 }
             }
+        }
+    };
+
+    let mut do_close_project = {
+        let mut project = project.clone();
+        let mut open_tabs = open_tabs.clone();
+        let mut active_tab = active_tab.clone();
+        let mut content_sig = content.clone();
+        let mut is_saved = is_saved.clone();
+        move || {
+            project.set(None);
+            open_tabs.set(Vec::new());
+            active_tab.set(None);
+            content_sig.set(String::new());
+            is_saved.set(true);
+            fs::settings::save_last_project_path(None);
         }
     };
 
@@ -544,6 +597,7 @@ pub fn App() -> Element {
                         push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
                         other_files_total.set(0);
                         *proj_sig.write() = Some(p);
+                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
                     }
                     Err(e) => {
                         *notif.write() = Some(format!("作成エラー: {}", e));
@@ -567,6 +621,7 @@ pub fn App() -> Element {
                         push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
                         other_files_total.set(get_other_files_total(&p, &None));
                         *proj_sig.write() = Some(p);
+                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
                     }
                     Err(e) => {
                         *notif.write() = Some(format!("開くエラー: {}", e));
@@ -615,19 +670,42 @@ pub fn App() -> Element {
     };
 
     let on_close_project = {
-        let mut project = project.clone();
-        let mut open_tabs = open_tabs.clone();
-        let mut active_tab = active_tab.clone();
-        let mut content_sig = content.clone();
-        let mut is_saved = is_saved.clone();
+        let is_saved = is_saved.clone();
+        let mut close_pending = close_pending.clone();
         move |_| {
-            project.set(None);
-            open_tabs.set(Vec::new());
-            active_tab.set(None);
-            content_sig.set(String::new());
-            is_saved.set(true);
+            if !*is_saved.read() {
+                close_pending.set(Some(CloseAction::CloseProject));
+            } else {
+                do_close_project();
+            }
         }
     };
+
+    #[cfg(not(target_os = "android"))]
+    let close_desktop: Rc<dyn Fn()> = {
+        let d = desktop.clone();
+        Rc::new(move || d.close())
+    };
+    #[cfg(target_os = "android")]
+    let close_desktop: Rc<dyn Fn()> = Rc::new(|| {});
+
+    #[cfg(not(target_os = "android"))]
+    let desktop_window = desktop.clone();
+    #[cfg(not(target_os = "android"))]
+    let on_close_window = {
+        let is_saved = is_saved.clone();
+        let mut close_pending = close_pending.clone();
+        let d = desktop_window;
+        move |_| {
+            if !*is_saved.read() {
+                close_pending.set(Some(CloseAction::CloseWindow));
+            } else {
+                d.close();
+            }
+        }
+    };
+    #[cfg(target_os = "android")]
+    let on_close_window = |_| {};
 
     let on_settings = {
         let project = project.clone();
@@ -650,10 +728,22 @@ pub fn App() -> Element {
         let mut project = project.clone();
         let mut global_settings = global_settings.clone();
         let mut save_notification = save_notification.clone();
+        #[cfg(not(target_os = "android"))]
+        let desktop = desktop.clone();
         move |(name, p_settings, g_settings): (String, ProjectSettings, crate::model::project::GlobalSettings)| {
             // Save global settings
             *global_settings.write() = g_settings.clone();
             let _ = fs::settings::save_global_settings(&g_settings);
+            // Apply dark mode CSS class
+            let js = if g_settings.theme_dark {
+                "document.documentElement.classList.add('dark')"
+            } else {
+                "document.documentElement.classList.remove('dark')"
+            };
+            #[cfg(not(target_os = "android"))]
+            let _ = desktop.webview.evaluate_script(js);
+            #[cfg(target_os = "android")]
+            let _ = eval(js);
 
             // Save project settings
             let mut proj = project.write();
@@ -1010,8 +1100,8 @@ pub fn App() -> Element {
     };
 
     let on_rename_material = {
-        let mut rename_target = rename_target.clone();
         let mut rename_dialog_visible = rename_dialog_visible.clone();
+        let mut rename_target = rename_target.clone();
         move |(file_name, current_title): (String, String)| {
             rename_target.set((file_name, current_title));
             rename_dialog_visible.set(true);
@@ -1108,6 +1198,7 @@ pub fn App() -> Element {
             let tc = tab_content.clone();
             let gen_sig = save_gen.clone();
             let mut pclone = proj.clone();
+            let mut saved_flag = is_saved.clone();
             spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 if *gen_sig.read() != g {
@@ -1118,6 +1209,7 @@ pub fn App() -> Element {
                 if let (Some(ref doc), Some(ref mut proj)) = (d, p.as_mut()) {
                     if let Some(text) = tc.read().get(doc).cloned() {
                         let _ = save_doc_content(proj, doc, &text);
+                        saved_flag.set(true);
                         if let DocRef::Tale { chapter_dir, tale_file, .. } = doc {
                             let count = text.chars().filter(|c| !c.is_whitespace()).count();
                             for ch in &mut proj.chapters {
@@ -1156,6 +1248,8 @@ pub fn App() -> Element {
     let preview_visible = *show_preview.read();
     let editor_visible = *show_editor.read();
     let recent_list = recent_projects.read().clone();
+    let has_project = project.read().is_some();
+    let proj_name_for_welcome = project.read().as_ref().map(|p| p.name.clone()).unwrap_or_default();
 
     // Derive current content from active tab for editor
     let editor_placeholder = match active_tab.read().as_ref() {
@@ -1191,6 +1285,7 @@ pub fn App() -> Element {
                 on_increase_font: on_increase_font,
                 on_decrease_font: on_decrease_font,
                 on_settings: on_settings,
+                on_close_window: on_close_window,
             }
             div { class: main_class,
                 // Sidebar
@@ -1236,74 +1331,83 @@ pub fn App() -> Element {
                         }
 
                     } else {
-                        div { class: "welcome",
-                            h1 { "Chronicle" }
-                            p { "小説執筆支援アプリケーション" }
-                            div { class: "welcome-actions",
-                                button {
-                                    class: "welcome-btn",
-                                    onclick: move |_| dialog_visible.set(true),
-                                    "新規プロジェクト"
-                                }
-                                button {
-                                    class: "welcome-btn",
-                                    onclick: move |_| {
-                                        let mut proj_sig = project.clone();
-                                        let mut notif = save_notification.clone();
-                                        let mut recent = recent_projects.clone();
-spawn(async move {
-    let dir = pick_folder("プロジェクトフォルダを選択");
-    if let Some(dir) = dir {
-        match crate::fs::project::load_project(&dir) {
-            Ok(p) => {
-                push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
-                *proj_sig.write() = Some(p);
-            }
-            Err(e) => {
-                *notif.write() = Some(format!("開くエラー: {}", e));
-            }
-        }
-}
-        });
-                                    },
-                                    "プロジェクトを開く"
-                                }
+                        if has_project {
+                            div { class: "welcome",
+                                h2 { "{proj_name_for_welcome}" }
+                                p { "サイドバーから章や話を選択してください" }
                             }
-                            if !recent_list.is_empty() {
-                                div { class: "welcome-recent",
-                                    h3 { "最近のプロジェクト" }
-                                    ul {
-                                        {recent_list.iter().rev().map(|dir| {
-                                            let d = dir.clone();
-                                            let name = std::path::Path::new(&d)
-                                                .file_name()
-                                                .and_then(|n| n.to_str())
-                                                .unwrap_or(&d)
-                                                .to_string();
-                                            rsx! {
-                                                li {
-                                                    class: "welcome-recent-item",
-                                                    onclick: move |_| {
-                                                        let mut proj_sig = project.clone();
-                                                        let mut notif = save_notification.clone();
-                                                        let mut recent = recent_projects.clone();
-                                                        let dir = d.clone();
-                                                         spawn(async move {
-                                                             match crate::fs::project::load_project(std::path::Path::new(&dir)) {
-                                                                 Ok(p) => {
-                                                                     push_recent(&mut recent.write(), dir);
-                                                                     *proj_sig.write() = Some(p);
-                                                                 }
-                                                                 Err(e) => {
-                                                                     *notif.write() = Some(format!("開くエラー: {}", e));
-                                                                 }
-                                                             }
-                                                         });
-                                                     },
-                                                    "{name}"
+                        } else {
+                            div { class: "welcome",
+                                h1 { "Chronicle" }
+                                p { "小説執筆支援アプリケーション" }
+                                div { class: "welcome-actions",
+                                    button {
+                                        class: "welcome-btn",
+                                        onclick: move |_| dialog_visible.set(true),
+                                        "新規プロジェクト"
+                                    }
+                                    button {
+                                        class: "welcome-btn",
+                                        onclick: move |_| {
+                                            let mut proj_sig = project.clone();
+                                            let mut notif = save_notification.clone();
+                                            let mut recent = recent_projects.clone();
+        spawn(async move {
+            let dir = pick_folder("プロジェクトフォルダを選択");
+            if let Some(dir) = dir {
+                match crate::fs::project::load_project(&dir) {
+                    Ok(p) => {
+                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                        *proj_sig.write() = Some(p);
+                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                    }
+                    Err(e) => {
+                        *notif.write() = Some(format!("開くエラー: {}", e));
+                    }
+                }
+            }
+        });
+                                        },
+                                        "プロジェクトを開く"
+                                    }
+                                }
+                                if !recent_list.is_empty() {
+                                    div { class: "welcome-recent",
+                                        h3 { "最近のプロジェクト" }
+                                        ul {
+                                            {recent_list.iter().rev().map(|dir| {
+                                                let d = dir.clone();
+                                                let name = std::path::Path::new(&d)
+                                                    .file_name()
+                                                    .and_then(|n| n.to_str())
+                                                    .unwrap_or(&d)
+                                                    .to_string();
+                                                rsx! {
+                                                    li {
+                                                        class: "welcome-recent-item",
+                                                        onclick: move |_| {
+                                                            let mut proj_sig = project.clone();
+                                                            let mut notif = save_notification.clone();
+                                                            let mut recent = recent_projects.clone();
+                                                            let dir = d.clone();
+                                                              spawn(async move {
+                                                                  match crate::fs::project::load_project(std::path::Path::new(&dir)) {
+                                                                      Ok(p) => {
+                                                                          push_recent(&mut recent.write(), dir.clone());
+                                                                          *proj_sig.write() = Some(p);
+                                                                          fs::settings::save_last_project_path(Some(&dir));
+                                                                      }
+                                                                      Err(e) => {
+                                                                          *notif.write() = Some(format!("開くエラー: {}", e));
+                                                                      }
+                                                                  }
+                                                              });
+                                                         },
+                                                        "{name}"
+                                                    }
                                                 }
-                                            }
-                                        })}
+                                            })}
+                                        }
                                     }
                                 }
                             }
@@ -1379,6 +1483,99 @@ spawn(async move {
             ConfirmDialog {
                 pending: pending_delete,
                 on_confirm: on_confirm_delete,
+            }
+            if close_pending.read().is_some() {
+                div { class: "dialog-overlay",
+                    onclick: move |_| close_pending.set(None),
+                    div { class: "dialog", onclick: |e| e.stop_propagation(),
+                        h2 { "確認" }
+                        div { class: "dialog-body",
+                            p { "保存していない変更があります。" }
+                            p { "保存してから閉じますか？" }
+                        }
+                        div { class: "dialog-actions",
+                            button {
+                                class: "dialog-btn",
+                                onclick: move |_| close_pending.set(None),
+                                "キャンセル"
+                            }
+                            button {
+                                class: "dialog-btn",
+                                onclick: {
+                                    let cd = close_desktop.clone();
+                                    let mut cp = close_pending.clone();
+                                    let mut proj = project.clone();
+                                    let mut tabs = open_tabs.clone();
+                                    let mut atab = active_tab.clone();
+                                    let mut cont = content.clone();
+                                    let mut sv = is_saved.clone();
+                                    move |_| {
+                                        let action = cp.read().clone();
+                                        cp.set(None);
+                                        match action {
+                                            Some(CloseAction::CloseProject) => {
+                                                proj.set(None);
+                                                tabs.set(Vec::new());
+                                                atab.set(None);
+                                                cont.set(String::new());
+                                                sv.set(true);
+                                                fs::settings::save_last_project_path(None);
+                                            }
+                                            Some(CloseAction::CloseWindow) => {
+                                                cd();
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                },
+                                "保存せずに閉じる"
+                            }
+                            button {
+                                class: "dialog-btn primary",
+                                onclick: {
+                                    let cd = close_desktop.clone();
+                                    let mut cp = close_pending.clone();
+                                    let mut proj = project.clone();
+                                    let mut tabs = open_tabs.clone();
+                                    let mut atab = active_tab.clone();
+                                    let mut cont = content.clone();
+                                    let mut sv = is_saved.clone();
+                                    let tc = tab_content.clone();
+                                    let at = active_tab.clone();
+                                    let mut nf = save_notification.clone();
+                                    move |_| {
+                                        let action = cp.read().clone();
+                                        let doc = at.read().clone();
+                                        let mut p = proj.write();
+                                        if let (Some(d), Some(ref mut proj2)) = (doc, p.as_mut()) {
+                                            if let Some(text) = tc.read().get(&d).cloned() {
+                                                let _ = save_doc_content(proj2, &d, &text);
+                                                *nf.write() = Some("保存しました".to_string());
+                                            }
+                                        }
+                                        drop(p);
+                                        sv.set(true);
+                                        cp.set(None);
+                                        match action {
+                                            Some(CloseAction::CloseProject) => {
+                                                proj.set(None);
+                                                tabs.set(Vec::new());
+                                                atab.set(None);
+                                                cont.set(String::new());
+                                                fs::settings::save_last_project_path(None);
+                                            }
+                                            Some(CloseAction::CloseWindow) => {
+                                                cd();
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                },
+                                "保存して閉じる"
+                            }
+                        }
+                    }
+                }
             }
             if let Some(msg) = save_notification.read().as_ref() {
                 div { class: "notification", "{msg}" }

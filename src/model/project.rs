@@ -252,6 +252,8 @@ pub struct GlobalSettings {
     pub font_family: String,
     pub line_height: f32,
     pub max_width: u32,
+    #[serde(default)]
+    pub last_project_path: Option<String>,
 }
 
 impl Default for GlobalSettings {
@@ -263,6 +265,7 @@ impl Default for GlobalSettings {
             font_family: "Noto Sans JP".to_string(),
             line_height: 2.0,
             max_width: 800,
+            last_project_path: None,
         }
     }
 }

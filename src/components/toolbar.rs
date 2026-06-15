@@ -31,6 +31,7 @@ pub fn Toolbar(
     on_increase_font: EventHandler<()>,
     on_decrease_font: EventHandler<()>,
     on_settings: EventHandler<()>,
+    on_close_window: EventHandler<()>,
 ) -> Element {
     let text = content.read().clone();
     let file_char_count = text.chars().filter(|c| !c.is_whitespace()).count();
@@ -57,7 +58,6 @@ pub fn Toolbar(
         let desktop = use_window();
         let min_btn = desktop.clone();
         let max_btn = desktop.clone();
-        let close_btn = desktop.clone();
         rsx! {
             div {
                 class: "titlebar",
@@ -79,7 +79,7 @@ pub fn Toolbar(
                     button {
                         class: "titlebar-btn titlebar-close",
                         onmousedown: |e| e.stop_propagation(),
-                        onclick: move |_| { close_btn.close(); },
+                        onclick: move |_| on_close_window.call(()),
                         "\u{2715}"
                     }
                 }

@@ -33,6 +33,12 @@ pub fn save_global_settings(settings: &GlobalSettings) -> Result<(), String> {
     Ok(())
 }
 
+pub fn save_last_project_path(path: Option<&str>) {
+    let mut settings = load_global_settings();
+    settings.last_project_path = path.map(|s| s.to_string());
+    let _ = save_global_settings(&settings);
+}
+
 pub fn load_global_settings() -> GlobalSettings {
     let path = get_settings_path();
     if !path.exists() {

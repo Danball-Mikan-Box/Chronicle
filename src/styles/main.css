@@ -460,7 +460,7 @@ input, textarea, button {
 .resize-handle {
     width: 5px;
     cursor: col-resize;
-    background: transparent;
+    background: var(--bg-editor);
     flex-shrink: 0;
     position: relative;
     z-index: 10;
@@ -478,6 +478,7 @@ input, textarea, button {
     flex-direction: column;
     min-width: 200px;
     overflow: hidden;
+    background: var(--bg-editor);
 }
 
 /* Welcome screen */
@@ -643,9 +644,10 @@ input, textarea, button {
     resize: none;
     border: none;
     padding: 24px 32px;
-    font-size: 16px;
-    line-height: 2;
-    font-family: "Noto Sans JP", "Yu Gothic", "游ゴシック", sans-serif;
+    font-size: var(--editor-font-size, 16px);
+    line-height: var(--editor-line-height, 2);
+    font-family: var(--editor-font-family, "Noto Sans JP", "Yu Gothic", "游ゴシック", sans-serif);
+    max-width: var(--editor-max-width, none);
     background: var(--bg-editor);
     color: var(--text-primary);
     outline: none;
@@ -691,9 +693,10 @@ input, textarea, button {
 }
 
 .preview {
-    font-size: 16px;
-    line-height: 2;
-    max-width: 800px;
+    font-family: var(--editor-font-family, "Noto Sans JP", "Yu Gothic", "游ゴシック", sans-serif);
+    font-size: var(--editor-font-size, 16px);
+    line-height: var(--editor-line-height, 2);
+    max-width: var(--editor-max-width, 800px);
     color: var(--text-primary);
 }
 

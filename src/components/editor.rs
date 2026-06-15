@@ -85,13 +85,10 @@ pub fn Editor(
 
     let settings = project.read().as_ref().map(|p| p.settings.clone()).unwrap_or_default();
     let gs = global_settings.read();
-    
-    let style = format!(
-        "font-family: '{}'; font-size: {}px; line-height: {}; max-width: {}px; margin: 0 auto;",
-        gs.font_family,
-        gs.font_size,
-        gs.line_height,
-        gs.max_width
+
+    let wrapper_style = format!(
+        "--editor-font-family: '{}'; --editor-font-size: {}px; --editor-line-height: {}; --editor-max-width: {}px;",
+        gs.font_family, gs.font_size, gs.line_height, gs.max_width,
     );
 
     let editor_class = if settings.indent_paragraphs {
@@ -241,7 +238,7 @@ pub fn Editor(
     };
 
     rsx! {
-        div { class: "editor-wrapper",
+        div { class: "editor-wrapper", style: "{wrapper_style}",
             if !*focus_mode.read() {
                 FormattingBar { on_format: on_format }
             }
@@ -253,7 +250,6 @@ pub fn Editor(
                 oncompositionstart: on_compositionstart,
                 oncompositionend: on_compositionend,
                 placeholder: "{placeholder}",
-                style: "{style}",
             }
         }
     }
