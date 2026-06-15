@@ -26,11 +26,11 @@ zip = "2"
 
 dioxus-mobile = "0.6"
 
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(all(not(target_os = "android"), not(target_os = "linux")))'.dependencies]
 rfd = { version = "0.14", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rfd = { version = "0.14", default-features = false, features = ["gtk3", "tokio"] }
+rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "2"

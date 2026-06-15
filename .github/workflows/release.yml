@@ -206,6 +206,121 @@ jobs:
           files: chronicle-*.AppImage
           fail_on_unmatched_files: false
 
+  macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - name: Derive version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+      - name: Build
+        run: cargo build --release --target x86_64-apple-darwin
+        env:
+          GIT_TAG: ${{ github.ref_name }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-x86_64-apple-darwin
+          path: target/x86_64-apple-darwin/release/chronicle
+
+  macos-aarch64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Derive version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+      - name: Build
+        run: cargo build --release --target aarch64-apple-darwin
+        env:
+          GIT_TAG: ${{ github.ref_name }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-aarch64-apple-darwin
+          path: target/aarch64-apple-darwin/release/chronicle
+
+  macos-universal:
+    needs: [macos-x86_64, macos-aarch64]
+    runs-on: macos-14
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chronicle-x86_64-apple-darwin
+          path: build/x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: chronicle-aarch64-apple-darwin
+          path: build/aarch64
+      - name: Derive version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Create universal binary and .app bundle
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p "Chronicle.app/Contents/MacOS"
+          mkdir -p "Chronicle.app/Contents/Resources"
+          lipo -create build/x86_64/chronicle build/aarch64/chronicle \
+            -output "Chronicle.app/Contents/MacOS/chronicle"
+          chmod +x "Chronicle.app/Contents/MacOS/chronicle"
+          cp Chronicle.png "Chronicle.app/Contents/Resources/"
+      - name: Create Info.plist
+        run: |
+          cat > "Chronicle.app/Contents/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>chronicle</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.chronicle.app</string>
+  <key>CFBundleName</key>
+  <string>Chronicle</string>
+  <key>CFBundleDisplayName</key>
+  <string>Chronicle</string>
+  <key>CFBundleVersion</key>
+  <string>${{ github.ref_name }}</string>
+  <key>CFBundleShortVersionString</key>
+  <string>${{ steps.version.outputs.version }}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>10.15</string>
+  <key>CFBundleIconFile</key>
+  <string>Chronicle</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+      - name: Create DMG
+        run: |
+          ln -sf /Applications "Chronicle.app/Contents/Applications"
+          VERSION="${{ steps.version.outputs.version }}"
+          hdiutil create -volname "Chronicle" -srcfolder "Chronicle.app" \
+            -ov -format UDZO "chronicle-$VERSION-macos-universal.dmg"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            chronicle-*-macos-universal.dmg
+          fail_on_unmatched_files: false
+
   windows:
     runs-on: windows-latest
     steps:

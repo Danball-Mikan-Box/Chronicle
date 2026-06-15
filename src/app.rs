@@ -37,8 +37,17 @@ fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
 }
 
 #[cfg(target_os = "android")]
-fn pick_save_path(_default_name: &str) -> Option<std::path::PathBuf> {
-    None
+fn android_storage_dir() -> std::path::PathBuf {
+    let data_dir = std::env::var("CHRONICLE_DATA_DIR")
+        .unwrap_or_else(|_| "/data/data/com.chronicle.app/files".to_string());
+    std::path::PathBuf::from(data_dir)
+}
+
+#[cfg(target_os = "android")]
+fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
+    let dir = android_storage_dir().join("exports");
+    let _ = std::fs::create_dir_all(&dir);
+    Some(dir.join(default_name))
 }
 
 #[cfg(not(target_os = "android"))]
@@ -50,7 +59,31 @@ fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
 
 #[cfg(target_os = "android")]
 fn pick_folder(_title: &str) -> Option<std::path::PathBuf> {
-    None
+    let dir = android_storage_dir().join("projects");
+    let _ = std::fs::create_dir_all(&dir);
+    Some(dir)
+}
+
+/// On Android, scan `dir` for valid project subdirectories.
+/// On desktop, return `dir` as-is.
+#[cfg(target_os = "android")]
+fn resolve_project_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    if dir.join("chronicle.json").exists() {
+        return Some(dir.to_path_buf());
+    }
+    let entries = std::fs::read_dir(dir).ok()?;
+    let mut projects: Vec<std::path::PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir() && e.path().join("chronicle.json").exists())
+        .map(|e| e.path())
+        .collect();
+    projects.sort_by_key(|p| std::fs::metadata(p).ok().and_then(|m| m.modified().ok()));
+    projects.into_iter().last()
+}
+
+#[cfg(not(target_os = "android"))]
+fn resolve_project_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    Some(dir.to_path_buf())
 }
 
 fn load_doc_content(p: &Project, doc: &DocRef) -> Result<String, String> {
@@ -661,10 +694,11 @@ pub fn App() -> Element {
                         p.settings.author = author;
                         handle_daily_stats(&mut p);
                         let _ = fs::project::save_project(&p);
-                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                        let project_dir = p.root_dir.to_string_lossy().to_string();
+                        push_recent(&mut recent.write(), project_dir.clone());
                         other_files_total.set(0);
                         *proj_sig.write() = Some(p);
-                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                        fs::settings::save_last_project_path(Some(&project_dir));
                     }
                     Err(e) => {
                         *notif.write() = Some(format!("作成エラー: {}", e));
@@ -682,17 +716,22 @@ pub fn App() -> Element {
         spawn(async move {
             let dir = pick_folder("プロジェクトフォルダを選択");
             if let Some(dir) = dir {
-                match fs::project::load_project(&dir) {
-                    Ok(mut p) => {
-                        handle_daily_stats(&mut p);
-                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
-                        other_files_total.set(get_other_files_total(&p, &None));
-                        *proj_sig.write() = Some(p);
-                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                if let Some(project_dir) = resolve_project_dir(&dir) {
+                    match fs::project::load_project(&project_dir) {
+                        Ok(mut p) => {
+                            handle_daily_stats(&mut p);
+                            let pd = project_dir.to_string_lossy().to_string();
+                            push_recent(&mut recent.write(), pd);
+                            other_files_total.set(get_other_files_total(&p, &None));
+                            *proj_sig.write() = Some(p);
+                            fs::settings::save_last_project_path(Some(&project_dir.to_string_lossy()));
+                        }
+                        Err(e) => {
+                            *notif.write() = Some(format!("開くエラー: {}", e));
+                        }
                     }
-                    Err(e) => {
-                        *notif.write() = Some(format!("開くエラー: {}", e));
-                    }
+                } else {
+                    *notif.write() = Some("プロジェクトが見つかりませんでした".to_string());
                 }
             }
         });
@@ -1497,13 +1536,18 @@ pub fn App() -> Element {
                                                 spawn(async move {
                                                     let dir = pick_folder("プロジェクトフォルダを選択");
                                                     if let Some(dir) = dir {
-                                                        match crate::fs::project::load_project(&dir) {
-                                                            Ok(p) => {
-                                                                push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
-                                                                *proj_sig.write() = Some(p);
-                                                                fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                                                        if let Some(project_dir) = resolve_project_dir(&dir) {
+                                                            match crate::fs::project::load_project(&project_dir) {
+                                                                Ok(p) => {
+                                                                    let pd = project_dir.to_string_lossy().to_string();
+                                                                    push_recent(&mut recent.write(), pd);
+                                                                    *proj_sig.write() = Some(p);
+                                                                    fs::settings::save_last_project_path(Some(&project_dir.to_string_lossy()));
+                                                                }
+                                                                Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
                                                             }
-                                                            Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                                        } else {
+                                                            *notif.write() = Some("プロジェクトが見つかりませんでした".to_string());
                                                         }
                                                     }
                                                 });
