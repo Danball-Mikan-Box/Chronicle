@@ -105,34 +105,34 @@ jobs:
           cp Chronicle.png "Chronicle.app/Contents/Resources/"
       - name: Create Info.plist
         run: |
-          cat > "Chronicle.app/Contents/Info.plist" << 'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleExecutable</key>
-  <string>chronicle</string>
-  <key>CFBundleIdentifier</key>
-  <string>com.chronicle.app</string>
-  <key>CFBundleName</key>
-  <string>Chronicle</string>
-  <key>CFBundleDisplayName</key>
-  <string>Chronicle</string>
-  <key>CFBundleVersion</key>
-  <string>${{ github.ref_name }}</string>
-  <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>10.15</string>
-  <key>CFBundleIconFile</key>
-  <string>Chronicle</string>
-  <key>NSHighResolutionCapable</key>
-  <true/>
-</dict>
-</plist>
-PLIST
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict>'
+            echo '  <key>CFBundleExecutable</key>'
+            echo '  <string>chronicle</string>'
+            echo '  <key>CFBundleIdentifier</key>'
+            echo '  <string>com.chronicle.app</string>'
+            echo '  <key>CFBundleName</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>CFBundleDisplayName</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>CFBundleVersion</key>'
+            echo '  <string>${{ github.ref_name }}</string>'
+            echo '  <key>CFBundleShortVersionString</key>'
+            echo '  <string>0.1.0</string>'
+            echo '  <key>CFBundlePackageType</key>'
+            echo '  <string>APPL</string>'
+            echo '  <key>LSMinimumSystemVersion</key>'
+            echo '  <string>10.15</string>'
+            echo '  <key>CFBundleIconFile</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>NSHighResolutionCapable</key>'
+            echo '  <true/>'
+            echo '</dict>'
+            echo '</plist>'
+          } > "Chronicle.app/Contents/Info.plist"
       - name: Create DMG
         run: |
           ln -sf /Applications "Chronicle.app/Contents/Applications"
@@ -422,34 +422,34 @@ PLIST
           cp Chronicle.png "Chronicle.app/Contents/Resources/"
       - name: Create Info.plist
         run: |
-          cat > "Chronicle.app/Contents/Info.plist" << 'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleExecutable</key>
-  <string>chronicle</string>
-  <key>CFBundleIdentifier</key>
-  <string>com.chronicle.app</string>
-  <key>CFBundleName</key>
-  <string>Chronicle</string>
-  <key>CFBundleDisplayName</key>
-  <string>Chronicle</string>
-  <key>CFBundleVersion</key>
-  <string>${{ github.ref_name }}</string>
-  <key>CFBundleShortVersionString</key>
-  <string>${{ steps.version.outputs.version }}</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>10.15</string>
-  <key>CFBundleIconFile</key>
-  <string>Chronicle</string>
-  <key>NSHighResolutionCapable</key>
-  <true/>
-</dict>
-</plist>
-PLIST
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict>'
+            echo '  <key>CFBundleExecutable</key>'
+            echo '  <string>chronicle</string>'
+            echo '  <key>CFBundleIdentifier</key>'
+            echo '  <string>com.chronicle.app</string>'
+            echo '  <key>CFBundleName</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>CFBundleDisplayName</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>CFBundleVersion</key>'
+            echo '  <string>${{ github.ref_name }}</string>'
+            echo '  <key>CFBundleShortVersionString</key>'
+            echo '  <string>${{ steps.version.outputs.version }}</string>'
+            echo '  <key>CFBundlePackageType</key>'
+            echo '  <string>APPL</string>'
+            echo '  <key>LSMinimumSystemVersion</key>'
+            echo '  <string>10.15</string>'
+            echo '  <key>CFBundleIconFile</key>'
+            echo '  <string>Chronicle</string>'
+            echo '  <key>NSHighResolutionCapable</key>'
+            echo '  <true/>'
+            echo '</dict>'
+            echo '</plist>'
+          } > "Chronicle.app/Contents/Info.plist"
       - name: Create DMG
         run: |
           ln -sf /Applications "Chronicle.app/Contents/Applications"
