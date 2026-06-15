@@ -236,7 +236,7 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install WiX Toolset
-        run: choco install wixtoolset --version=3.14.1 -y --limit-output
+        run: choco install wixtoolset -y --limit-output
 
       - name: Install cargo-wix
         run: cargo install cargo-wix
