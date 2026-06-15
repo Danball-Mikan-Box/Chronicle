@@ -333,12 +333,29 @@ jobs:
             exit 1
           fi
           echo "Signing APK: $APK"
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-            -keystore chronicle.keystore \
-            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
-            "$APK" \
-            "${{ secrets.ANDROID_KEY_ALIAS }}"
+          # Remove old debug signatures so we can re-sign from scratch
+          zip -d "$APK" 'META-INF/*' 2>/dev/null || true
+          # Find apksigner in Android SDK build-tools
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" -type f 2>/dev/null | head -1)
+          if [ -z "$APKSIGNER" ] && [ -n "$ANDROID_SDK_ROOT" ]; then
+            APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name "apksigner" -type f 2>/dev/null | head -1)
+          fi
+          if [ -n "$APKSIGNER" ]; then
+            echo "Using apksigner: $APKSIGNER"
+            "$APKSIGNER" sign --ks chronicle.keystore \
+              --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+              --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
+              "$APK"
+          else
+            echo "apksigner not found, falling back to jarsigner (v1 only)"
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore chronicle.keystore \
+              -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
+              "$APK" \
+              "${{ secrets.ANDROID_KEY_ALIAS }}"
+          fi
 
       - name: Upload APK
         uses: softprops/action-gh-release@v2
