@@ -346,7 +346,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: appimage-artifacts
-          path: chronicle-*.AppImage
+          path: chronicle-*-x86_64.AppImage
           if-no-files-found: error
 
   release-macos-x86_64:
