@@ -1361,13 +1361,15 @@ spawn(async move {
                     }
                 },
             }
-            SettingsDialog {
-                visible: settings_visible,
-                project_name: project_name,
-                project_settings: project_settings,
-                global_settings: global_settings,
-                project_is_open: project.read().is_some(),
-                on_save: on_confirm_settings,
+            if *settings_visible.read() {
+                SettingsDialog {
+                    visible: settings_visible,
+                    project_name: project_name,
+                    project_settings: project_settings,
+                    global_settings: global_settings,
+                    project_is_open: project.read().is_some(),
+                    on_save: on_confirm_settings,
+                }
             }
 
             ExportDialog {

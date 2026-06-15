@@ -122,6 +122,7 @@ input, textarea, button {
     background: transparent;
     color: var(--text-secondary);
     font-size: 13px;
+    line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -149,6 +150,17 @@ input, textarea, button {
     gap: 12px;
     user-select: none;
     -webkit-user-select: none;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+    flex: 0 0 auto;
+}
+
+.toolbar-center {
+    flex: 0 1 auto;
 }
 
 .toolbar-left {
@@ -170,6 +182,10 @@ input, textarea, button {
     padding: 2px 8px;
     background: var(--bg-btn);
     border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
 }
 
 .toolbar-center {
@@ -179,13 +195,19 @@ input, textarea, button {
 }
 
 .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 4px 10px;
     border: 1px solid var(--border);
     border-radius: 4px;
     background: var(--bg-btn);
     cursor: pointer;
     font-size: 12px;
+    line-height: 1;
     color: var(--text-secondary);
+    white-space: nowrap;
+    height: 28px;
 }
 
 .toolbar-btn:hover {
@@ -213,6 +235,7 @@ input, textarea, button {
 
 .font-size-controls button {
     padding: 4px 8px;
+    height: 28px;
 }
 
 .font-size-value {
@@ -1601,15 +1624,12 @@ input[type="range"] {
     .titlebar { display: none !important }
 
     .toolbar {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
         padding: 4px 8px;
-        gap: 2px;
+        gap: 4px;
     }
     .toolbar h1 { font-size: 14px; margin-right: 4px }
     .toolbar .project-name { font-size: 11px; max-width: 100px; overflow: hidden; text-overflow: ellipsis }
-    .toolbar-btn { font-size: 11px; padding: 4px 6px }
+    .toolbar-btn { font-size: 11px; padding: 4px 6px; height: 26px }
     .toolbar .separator { margin: 0 2px }
     .toolbar-center { flex-wrap: nowrap; overflow-x: auto; gap: 2px }
     .toolbar-right { display: none }
@@ -1697,7 +1717,7 @@ input[type="range"] {
     .preview-pane { max-height: 40vh }
     .toolbar-center .separator { display: none }
     .toolbar .toolbar-right { display: none }
-    .toolbar-btn { font-size: 10px; padding: 3px 4px }
+    .toolbar-btn { font-size: 10px; padding: 3px 4px; height: 24px }
     .tab { font-size: 11px; padding: 4px 8px }
 }
 

@@ -346,10 +346,6 @@ pub fn SettingsDialog(
     project_is_open: bool,
     on_save: EventHandler<(String, ProjectSettings, crate::model::project::GlobalSettings)>,
 ) -> Element {
-    if !*visible.read() {
-        return Ok(VNode::placeholder());
-    }
-
     let settings = project_settings.read().clone();
     let g_settings = global_settings.read().clone();
     let mut name = use_signal(|| project_name.read().clone());
