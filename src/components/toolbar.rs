@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::use_window;
 
 use crate::model::project::{Project, WritingMode};
+#[cfg(not(target_os = "android"))]
 use crate::model::version::VERSION;
 
 #[component]

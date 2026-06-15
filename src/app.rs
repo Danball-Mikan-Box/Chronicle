@@ -17,6 +17,32 @@ use crate::fs;
 use crate::model::{ActivityTab, DocRef, Project, ProjectSettings, WritingMode};
 use crate::styles;
 
+#[cfg(not(target_os = "android"))]
+fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("エクスポート先を選択")
+        .set_file_name(default_name)
+        .add_filter("ZIP Archive", &["zip"])
+        .save_file()
+}
+
+#[cfg(target_os = "android")]
+fn pick_save_path(_default_name: &str) -> Option<std::path::PathBuf> {
+    None
+}
+
+#[cfg(not(target_os = "android"))]
+fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new()
+        .set_title(title)
+        .pick_folder()
+}
+
+#[cfg(target_os = "android")]
+fn pick_folder(_title: &str) -> Option<std::path::PathBuf> {
+    None
+}
+
 fn load_doc_content(p: &Project, doc: &DocRef) -> Result<String, String> {
     match doc {
         DocRef::Tale { chapter_dir, tale_file, .. } => {
@@ -472,11 +498,7 @@ pub fn App() -> Element {
                 ExportFormat::HamelnZip => "ハーメルン投稿用.zip".to_string(),
             };
 
-            let dialog = rfd::FileDialog::new()
-                .set_title("エクスポート先を選択")
-                .set_file_name(&default_name);
-            
-            let path = dialog.add_filter("ZIP Archive", &["zip"]).save_file();
+            let path = pick_save_path(&default_name);
 
             if let Some(path) = path {
                 let res = match format {
@@ -512,9 +534,7 @@ pub fn App() -> Element {
         let mut recent = recent_projects.clone();
         let mut other_files_total = other_files_total.clone();
         spawn(async move {
-            let dir = rfd::FileDialog::new()
-                .set_title("プロジェクトを作成する場所を選択")
-                .pick_folder();
+            let dir = pick_folder("プロジェクトを作成する場所を選択");
             if let Some(dir) = dir {
                 match fs::project::create_project(&name, &dir) {
                     Ok(mut p) => {
@@ -539,9 +559,7 @@ pub fn App() -> Element {
         let mut recent = recent_projects.clone();
         let mut other_files_total = other_files_total.clone();
         spawn(async move {
-            let dir = rfd::FileDialog::new()
-                .set_title("プロジェクトフォルダを選択")
-                .pick_folder();
+            let dir = pick_folder("プロジェクトフォルダを選択");
             if let Some(dir) = dir {
                 match fs::project::load_project(&dir) {
                     Ok(mut p) => {
@@ -1234,9 +1252,7 @@ pub fn App() -> Element {
                                         let mut notif = save_notification.clone();
                                         let mut recent = recent_projects.clone();
 spawn(async move {
-    let dir = rfd::FileDialog::new()
-        .set_title("プロジェクトフォルダを選択")
-        .pick_folder();
+    let dir = pick_folder("プロジェクトフォルダを選択");
     if let Some(dir) = dir {
         match crate::fs::project::load_project(&dir) {
             Ok(p) => {

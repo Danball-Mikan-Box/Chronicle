@@ -244,7 +244,7 @@ jobs:
       - name: Build MSI
         run: |
           cargo wix init
-          cargo wix build
+          cargo wix
 
       - name: Build portable zip
         shell: pwsh
@@ -301,7 +301,7 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
-        run: cargo install dioxus-cli
+        run: cargo install cargo-binstall && cargo binstall dioxus-cli -y
 
       - name: Build Android APK
         run: dx build --platform android --release
@@ -311,5 +311,5 @@ jobs:
       - name: Upload APK
         uses: softprops/action-gh-release@v2
         with:
-          files: target/android/**/*.apk
+          files: target/dx/**/*.apk
           fail_on_unmatched_files: false
