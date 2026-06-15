@@ -3,7 +3,7 @@ use dioxus::document::eval;
 use dioxus::prelude::*;
 #[cfg(not(target_os = "android"))]
 use dioxus_desktop::use_window;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 
@@ -163,6 +163,20 @@ pub fn App() -> Element {
     let rename_target = use_signal(|| (String::new(), String::new()));
     let mut save_notification = use_signal(|| Option::<String>::None);
     let is_saved = use_signal(|| true);
+    let mut tab_dirty: Signal<HashSet<DocRef>> = use_signal(|| HashSet::new());
+    let mut tab_close_pending: Signal<Option<DocRef>> = use_signal(|| None);
+    {
+        let is_saved = is_saved.clone();
+        let active_tab = active_tab.clone();
+        let mut tab_dirty = tab_dirty.clone();
+        use_effect(move || {
+            if !*is_saved.read() {
+                if let Some(doc) = active_tab.read().clone() {
+                    tab_dirty.write().insert(doc);
+                }
+            }
+        });
+    }
     let mut global_settings = use_signal(|| fs::settings::load_global_settings());
     let is_dark = use_memo(move || global_settings.read().theme_dark);
     let auto_save_enabled = use_memo(move || global_settings.read().auto_save);
@@ -213,6 +227,7 @@ pub fn App() -> Element {
     let mut focus_mode = use_signal(|| false);
 
     let activity_tab = use_signal(|| ActivityTab::Explorer);
+    let mut mobile_page = use_signal(|| crate::model::MobilePage::Editor);
 
 
     let writing_mode_str = use_memo(move || match *writing_mode.read() {
@@ -244,12 +259,8 @@ pub fn App() -> Element {
         });
     }
 
-    // Resize JS
-    #[cfg(not(target_os = "android"))]
-    {
-        let desktop_ui = desktop.clone();
-    use_effect(move || {
-        let js = r#"
+    // Resize JS (shared between desktop and Android)
+    let resize_js = r#"
 (function() {
     if (window.__chronicle_init) return;
     window.__chronicle_init = true;
@@ -274,14 +285,10 @@ pub fn App() -> Element {
         var vsb = vis(sb), ved = vis(ed), vpv = vis(pv);
 
         if (pb) {
-            // sidebar | handle | editor  (preview below)
-            // Read current heights
             var pvH = pv ? (parseFloat(pv.style.height) || 300) : 300;
             var sbW = sb ? (parseFloat(sb.style.width) || 240) : 0;
-            // Clamp preview height
             pvH = Math.max(MIN_PV, Math.min(MAX_PV, Math.min(pvH, ch - HW - MIN_ED - (vsb ? MIN_SB : 0))));
             if (vpv) { pv.style.height = pvH + 'px'; pv.style.flexBasis = pvH + 'px'; }
-            // Clamp sidebar width
             if (vsb) {
                 sbW = Math.max(MIN_SB, Math.min(MAX_SB, Math.min(sbW, cw - HW - MIN_ED)));
                 sb.style.width = sbW + 'px';
@@ -289,15 +296,12 @@ pub fn App() -> Element {
         } else {
             var aw = cw - ((vsb && ved ? 1 : 0) + (ved && vpv ? 1 : 0)) * HW;
             if (aw <= 0) return;
-            // Read current widths
             var sbW = sb ? (parseFloat(sb.style.width) || 240) : 0;
             var pvW = pv ? (parseFloat(pv.style.width) || 400) : 0;
-            // Clamp sidebar: can't starve editor + preview
             if (vsb) {
                 sbW = Math.max(MIN_SB, Math.min(MAX_SB, Math.min(sbW, aw - (vpv ? MIN_PV : 0) - MIN_ED)));
                 sb.style.width = sbW + 'px';
             }
-            // Clamp preview: can't starve editor + sidebar
             if (vpv) {
                 pvW = Math.max(MIN_PV, Math.min(MAX_PV, Math.min(pvW, aw - (vsb ? MIN_SB : 0) - MIN_ED)));
                 pv.style.width = pvW + 'px';
@@ -306,7 +310,6 @@ pub fn App() -> Element {
     }
     window.__chronicle_apply = apply;
 
-    // Drag
     document.addEventListener('mousedown', function(e) {
         var h = e.target.closest('.resize-handle');
         if (!h) return;
@@ -317,12 +320,7 @@ pub fn App() -> Element {
         var isV = pb && h.id === 'resize-preview';
         var el = h.id === 'resize-sidebar' ? document.querySelector('.sidebar') : document.querySelector('.preview-pane');
         if (!el) return;
-        DRAG = {
-            id: h.id,
-            startPos: isV ? e.clientY : e.clientX,
-            startSize: isV ? el.offsetHeight : el.offsetWidth,
-            isV: isV,
-        };
+        DRAG = { id: h.id, startPos: isV ? e.clientY : e.clientX, startSize: isV ? el.offsetHeight : el.offsetWidth, isV: isV };
     });
 
     document.addEventListener('mousemove', function(e) {
@@ -330,29 +328,24 @@ pub fn App() -> Element {
         var delta = (DRAG.isV ? e.clientY : e.clientX) - DRAG.startPos;
         var c = document.querySelector('.main-content');
         if (!c) return;
-        var pb = c.classList.contains('preview-bottom');
         var cSize = DRAG.isV ? c.offsetHeight : c.offsetWidth;
-        var ed = document.querySelector('.editor-pane');
         var sb = document.querySelector('.sidebar');
         var pv = document.querySelector('.preview-pane');
 
         if (DRAG.id === 'resize-sidebar') {
             if (!sb) return;
-            var vsb = vis(sb), ved = vis(ed), vpv = pv && vis(pv);
+            var vsb = vis(sb), vpv = pv && vis(pv);
             var maxW = cSize - HW - (vpv ? MIN_PV : 0) - MIN_ED;
             var newW = Math.max(MIN_SB, Math.min(MAX_SB, DRAG.startSize + delta, maxW));
             sb.style.width = newW + 'px';
         } else if (DRAG.id === 'resize-preview') {
             if (!pv) return;
-            var vsb = sb && vis(sb), ved = vis(ed), vpv = vis(pv);
+            var vsb = sb && vis(sb);
             if (DRAG.isV) {
-                // Drag up = preview smaller, so negative delta
                 var maxH = cSize - HW - MIN_ED;
                 var newH = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxH));
-                pv.style.height = newH + 'px';
-                pv.style.flexBasis = newH + 'px';
+                pv.style.height = newH + 'px'; pv.style.flexBasis = newH + 'px';
             } else {
-                // Drag right = preview smaller, so negative delta
                 var maxW = cSize - HW - (vsb ? MIN_SB : 0) - MIN_ED;
                 var newW = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxW));
                 pv.style.width = newW + 'px';
@@ -363,16 +356,60 @@ pub fn App() -> Element {
     document.addEventListener('mouseup', function() { DRAG = null; });
     document.addEventListener('mouseleave', function() { DRAG = null; });
 
-    // ResizeObserver for reliable resize handling
+    // Touch events for mobile/Android
+    document.addEventListener('touchstart', function(e) {
+        var h = e.target.closest('.resize-handle');
+        if (!h) return;
+        e.preventDefault();
+        var c = document.querySelector('.main-content');
+        if (!c) return;
+        var pb = c.classList.contains('preview-bottom');
+        var isV = pb && h.id === 'resize-preview';
+        var el = h.id === 'resize-sidebar' ? document.querySelector('.sidebar') : document.querySelector('.preview-pane');
+        if (!el) return;
+        var t = e.touches[0];
+        DRAG = { id: h.id, startPos: isV ? t.clientY : t.clientX, startSize: isV ? el.offsetHeight : el.offsetWidth, isV: isV };
+    }, { passive: false });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!DRAG) return;
+        e.preventDefault();
+        var t = e.touches[0];
+        var delta = (DRAG.isV ? t.clientY : t.clientX) - DRAG.startPos;
+        var c = document.querySelector('.main-content');
+        if (!c) return;
+        var cSize = DRAG.isV ? c.offsetHeight : c.offsetWidth;
+        var sb = document.querySelector('.sidebar');
+        var pv = document.querySelector('.preview-pane');
+
+        if (DRAG.id === 'resize-sidebar') {
+            if (!sb) return;
+            var vsb = vis(sb), vpv = pv && vis(pv);
+            var maxW = cSize - HW - (vpv ? MIN_PV : 0) - MIN_ED;
+            var newW = Math.max(MIN_SB, Math.min(MAX_SB, DRAG.startSize + delta, maxW));
+            sb.style.width = newW + 'px';
+        } else if (DRAG.id === 'resize-preview') {
+            if (!pv) return;
+            var vsb = sb && vis(sb);
+            if (DRAG.isV) {
+                var maxH = cSize - HW - MIN_ED;
+                var newH = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxH));
+                pv.style.height = newH + 'px'; pv.style.flexBasis = newH + 'px';
+            } else {
+                var maxW = cSize - HW - (vsb ? MIN_SB : 0) - MIN_ED;
+                var newW = Math.max(MIN_PV, Math.min(MAX_PV, DRAG.startSize - delta, maxW));
+                pv.style.width = newW + 'px';
+            }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', function() { DRAG = null; });
+
     if (window.ResizeObserver) {
         var mc = document.querySelector('.main-content');
-        if (mc) {
-            var ro = new ResizeObserver(function() { apply(); });
-            ro.observe(mc);
-        }
+        if (mc) { var ro = new ResizeObserver(function() { apply(); }); ro.observe(mc); }
     }
 
-    // Preview scroll follow
     var p = document.querySelector('.preview');
     if (p && !p._ps) {
         p._ps = true;
@@ -394,9 +431,20 @@ pub fn App() -> Element {
     apply();
 })();
 "#;
-        let _ = desktop_ui.webview.evaluate_script(js);
-    });
 
+    #[cfg(not(target_os = "android"))]
+    {
+        let desktop_ui = desktop.clone();
+        use_effect(move || {
+            let _ = desktop_ui.webview.evaluate_script(resize_js);
+        });
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        use_effect(move || {
+            let _ = eval(resize_js);
+        });
     }
     // ── Helpers ──
 
@@ -438,25 +486,28 @@ pub fn App() -> Element {
                 content_sig.set(String::new());
             }
             is_saved.set(true);
-            chapter_version += 1;
+            let next = *chapter_version.read() + 1;
+            chapter_version.set(next);
         }
     };
 
-    let on_open_doc = {
+    let mut on_open_doc = {
         let mut switch_to_doc = switch_to_doc.clone();
         move |doc: DocRef| {
             switch_to_doc(doc);
         }
     };
 
-    let on_close_tab = {
+    let mut execute_close_tab = {
         let mut active_tab = active_tab.clone();
         let mut open_tabs = open_tabs.clone();
         let mut tab_content = tab_content.clone();
         let mut content_sig = content.clone();
         let mut chapter_version = chapter_version.clone();
         let mut is_saved = is_saved.clone();
+        let mut tab_dirty = tab_dirty.clone();
         move |doc: DocRef| {
+            tab_dirty.write().remove(&doc);
             tab_content.write().remove(&doc);
             let mut tabs = open_tabs.write();
             let idx = tabs.iter().position(|t| t == &doc);
@@ -474,7 +525,21 @@ pub fn App() -> Element {
                     }
                 }
             }
-            chapter_version += 1;
+            let next = *chapter_version.read() + 1;
+            chapter_version.set(next);
+        }
+    };
+
+    let on_close_tab = {
+        let tab_dirty = tab_dirty.clone();
+        let mut tab_close_pending = tab_close_pending.clone();
+        let mut execute_close_tab = execute_close_tab.clone();
+        move |doc: DocRef| {
+            if tab_dirty.read().contains(&doc) {
+                tab_close_pending.set(Some(doc));
+            } else {
+                execute_close_tab(doc);
+            }
         }
     };
 
@@ -485,6 +550,7 @@ pub fn App() -> Element {
         let mut is_saved = is_saved.clone();
         let mut save_notification = save_notification.clone();
         let mut content_sig = content.clone();
+        let mut tab_dirty = tab_dirty.clone();
         move || {
             let doc = active_tab.read().clone();
             let mut p = project.write();
@@ -502,11 +568,11 @@ pub fn App() -> Element {
                                                 break;
                                             }
                                         }
-                                        break;
                                     }
                                 }
                             }
                             *save_notification.write() = Some("保存しました".to_string());
+                            tab_dirty.write().remove(&d);
                             is_saved.set(true);
                             content_sig.set(text);
                         }
@@ -689,24 +755,6 @@ pub fn App() -> Element {
     };
     #[cfg(target_os = "android")]
     let close_desktop: Rc<dyn Fn()> = Rc::new(|| {});
-
-    #[cfg(not(target_os = "android"))]
-    let desktop_window = desktop.clone();
-    #[cfg(not(target_os = "android"))]
-    let on_close_window = {
-        let is_saved = is_saved.clone();
-        let mut close_pending = close_pending.clone();
-        let d = desktop_window;
-        move |_| {
-            if !*is_saved.read() {
-                close_pending.set(Some(CloseAction::CloseWindow));
-            } else {
-                d.close();
-            }
-        }
-    };
-    #[cfg(target_os = "android")]
-    let on_close_window = |_| {};
 
     let on_settings = {
         let project = project.clone();
@@ -1245,6 +1293,17 @@ pub fn App() -> Element {
 
     // ── Render ──
 
+    let resize_grip = {
+        #[cfg(not(target_os = "android"))]
+        {
+            rsx! { div { class: "resize-grip" } }
+        }
+        #[cfg(target_os = "android")]
+        {
+            rsx! {}
+        }
+    };
+
     let sidebar_visible = *show_sidebar.read();
     let preview_visible = *show_preview.read();
     let editor_visible = *show_editor.read();
@@ -1257,6 +1316,258 @@ pub fn App() -> Element {
         Some(DocRef::Tale { tale_title, .. }) => format!("「{}」を書き始めましょう...", tale_title),
         Some(DocRef::Material { title, .. }) => format!("「{}」の内容を入力...", title),
         None => "章・話を選択してください".to_string(),
+    };
+    let mobile_placeholder = editor_placeholder.clone();
+
+    // Desktop main content (side-by-side panels)
+    #[cfg(not(target_os = "android"))]
+    let desktop_main_content = rsx! {
+        div { class: main_class,
+            if sidebar_visible {
+                Sidebar {
+                    project: project,
+                    active_tab: active_tab,
+                    activity_tab: activity_tab,
+                    on_add_chapter: on_add_chapter.clone(),
+                    on_delete_chapter: on_delete_chapter.clone(),
+                    on_rename_chapter: on_rename_chapter.clone(),
+                    on_add_tale: on_add_tale.clone(),
+                    on_delete_tale: on_delete_tale.clone(),
+                    on_rename_tale: on_rename_tale.clone(),
+                    on_add_material: on_add_material.clone(),
+                    on_delete_material: on_delete_material.clone(),
+                    on_rename_material: on_rename_material.clone(),
+                    on_open_doc: on_open_doc.clone(),
+                }
+            }
+            if sidebar_visible {
+                div { id: "resize-sidebar", class: "resize-handle" }
+            }
+            div { class: if *show_editor.read() { "editor-pane" } else { "editor-pane hidden" },
+                TabBar {
+                    open_tabs: open_tabs,
+                    active_tab: active_tab,
+                    on_close_tab: on_close_tab,
+                    on_open_doc: on_open_doc.clone(),
+                }
+                if active_tab.read().is_some() {
+                    Editor {
+                        content: content,
+                        project: project,
+                        global_settings: global_settings,
+                        is_saved: is_saved,
+                        on_save: on_save,
+                        focus_mode: focus_mode,
+                        placeholder: editor_placeholder,
+                    }
+                } else {
+                    if has_project {
+                        div { class: "welcome",
+                            h2 { "{proj_name_for_welcome}" }
+                            p { "サイドバーから章や話を選択してください" }
+                        }
+                    } else {
+                        div { class: "welcome",
+                            h1 { "Chronicle" }
+                            p { "小説執筆支援アプリケーション" }
+                            div { class: "welcome-actions",
+                                button { class: "welcome-btn", onclick: move |_| dialog_visible.set(true), "新規プロジェクト" }
+                                button { class: "welcome-btn", onclick: move |_| {
+                                    let mut proj_sig = project.clone();
+                                    let mut notif = save_notification.clone();
+                                    let mut recent = recent_projects.clone();
+                                    spawn(async move {
+                                        let dir = pick_folder("プロジェクトフォルダを選択");
+                                        if let Some(dir) = dir {
+                                            match crate::fs::project::load_project(&dir) {
+                                                Ok(p) => {
+                                                    push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                                                    *proj_sig.write() = Some(p);
+                                                    fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                                                }
+                                                Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                            }
+                                        }
+                                    });
+                                }, "プロジェクトを開く" }
+                            }
+                            if !recent_list.is_empty() {
+                                div { class: "welcome-recent",
+                                    h3 { "最近のプロジェクト" }
+                                    ul {
+                                        {recent_list.iter().rev().map(|dir| {
+                                            let d = dir.clone();
+                                            let name = std::path::Path::new(&d).file_name().and_then(|n| n.to_str()).unwrap_or(&d).to_string();
+                                            rsx! {
+                                                li {
+                                                    class: "welcome-recent-item",
+                                                    onclick: move |_| {
+                                                        let mut proj_sig = project.clone();
+                                                        let mut notif = save_notification.clone();
+                                                        let mut recent = recent_projects.clone();
+                                                        let dir = d.clone();
+                                                        spawn(async move {
+                                                            match crate::fs::project::load_project(std::path::Path::new(&dir)) {
+                                                                Ok(p) => { push_recent(&mut recent.write(), dir.clone()); *proj_sig.write() = Some(p); fs::settings::save_last_project_path(Some(&dir)); }
+                                                                Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                                            }
+                                                        });
+                                                    },
+                                                    "{name}"
+                                                }
+                                            }
+                                        })}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if preview_visible {
+                div { id: "resize-preview", class: "resize-handle" }
+            }
+            div { class: if *show_preview.read() { "preview-pane" } else { "preview-pane hidden" },
+                Preview {
+                    content: content,
+                    writing_mode: writing_mode_str,
+                    project: project,
+                    global_settings: global_settings,
+                }
+            }
+        }
+    };
+    #[cfg(target_os = "android")]
+    let desktop_main_content = rsx! {};
+
+    // Mobile main content (page-based, used on Android and narrow desktop)
+    let mobile_main_content = {
+        let page = *mobile_page.read();
+        rsx! {
+            div { class: "main-content mobile",
+                match page {
+                    crate::model::MobilePage::Files => rsx! {
+                        Sidebar {
+                            project: project,
+                            active_tab: active_tab,
+                            activity_tab: activity_tab,
+                            on_add_chapter: on_add_chapter.clone(),
+                            on_delete_chapter: on_delete_chapter.clone(),
+                            on_rename_chapter: on_rename_chapter.clone(),
+                            on_add_tale: on_add_tale.clone(),
+                            on_delete_tale: on_delete_tale.clone(),
+                            on_rename_tale: on_rename_tale.clone(),
+                            on_add_material: on_add_material.clone(),
+                            on_delete_material: on_delete_material.clone(),
+                            on_rename_material: on_rename_material.clone(),
+                            on_open_doc: {
+                                let mut mp = mobile_page.clone();
+                                move |doc| { on_open_doc(doc); mp.set(crate::model::MobilePage::Editor); }
+                            },
+                        }
+                    },
+                    crate::model::MobilePage::Editor => rsx! {
+                        div { class: "editor-pane",
+                            if active_tab.read().is_some() {
+                                Editor {
+                                    content: content,
+                                    project: project,
+                                    global_settings: global_settings,
+                                    is_saved: is_saved,
+                                    on_save: on_save,
+                                    focus_mode: focus_mode,
+                                    placeholder: mobile_placeholder,
+                                }
+                            } else {
+                                if has_project {
+                                    div { class: "welcome",
+                                        h2 { "{proj_name_for_welcome}" }
+                                        p { "サイドバーから章や話を選択してください" }
+                                    }
+                                } else {
+                                    div { class: "welcome",
+                                        h1 { "Chronicle" }
+                                        p { "小説執筆支援アプリケーション" }
+                                        div { class: "welcome-actions",
+                                            button { class: "welcome-btn", onclick: move |_| dialog_visible.set(true), "新規プロジェクト" }
+                                            button { class: "welcome-btn", onclick: move |_| {
+                                                let mut proj_sig = project.clone();
+                                                let mut notif = save_notification.clone();
+                                                let mut recent = recent_projects.clone();
+                                                spawn(async move {
+                                                    let dir = pick_folder("プロジェクトフォルダを選択");
+                                                    if let Some(dir) = dir {
+                                                        match crate::fs::project::load_project(&dir) {
+                                                            Ok(p) => {
+                                                                push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                                                                *proj_sig.write() = Some(p);
+                                                                fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                                                            }
+                                                            Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                                        }
+                                                    }
+                                                });
+                                            }, "プロジェクトを開く" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    crate::model::MobilePage::Preview => rsx! {
+                        div { class: "preview-pane",
+                            Preview {
+                                content: content,
+                                writing_mode: writing_mode_str,
+                                project: project,
+                                global_settings: global_settings,
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    };
+    // Status bar (desktop only)
+    #[cfg(not(target_os = "android"))]
+    let status_bar = rsx! {
+        StatusBar {
+            project: project,
+            active_tab: active_tab,
+            tab_content: tab_content,
+            is_saved: is_saved,
+            auto_save_enabled: auto_save_enabled,
+            writing_mode: writing_mode_str,
+            font_size: font_size,
+            on_increase_font: on_increase_font,
+            on_decrease_font: on_decrease_font,
+        }
+    };
+    #[cfg(target_os = "android")]
+    let status_bar = rsx! {};
+
+    // Bottom navigation (used on Android and narrow desktop)
+    let bottom_nav = rsx! {
+        nav { class: "mobile-nav",
+            button {
+                class: if *mobile_page.read() == crate::model::MobilePage::Files { "mobile-nav-btn active" } else { "mobile-nav-btn" },
+                onclick: move |_| mobile_page.set(crate::model::MobilePage::Files),
+                "\u{1F4C1}",
+                span { class: "mobile-nav-label", "ファイル" }
+            }
+            button {
+                class: if *mobile_page.read() == crate::model::MobilePage::Editor { "mobile-nav-btn active" } else { "mobile-nav-btn" },
+                onclick: move |_| mobile_page.set(crate::model::MobilePage::Editor),
+                "\u{270D}",
+                span { class: "mobile-nav-label", "エディタ" }
+            }
+            button {
+                class: if *mobile_page.read() == crate::model::MobilePage::Preview { "mobile-nav-btn active" } else { "mobile-nav-btn" },
+                onclick: move |_| mobile_page.set(crate::model::MobilePage::Preview),
+                "\u{1F441}",
+                span { class: "mobile-nav-label", "プレビュー" }
+            }
+        }
     };
 
     rsx! {
@@ -1286,158 +1597,11 @@ pub fn App() -> Element {
                 on_increase_font: on_increase_font,
                 on_decrease_font: on_decrease_font,
                 on_settings: on_settings,
-                on_close_window: on_close_window,
             }
-            div { class: main_class,
-                // Sidebar
-                if sidebar_visible {
-                    Sidebar {
-                        project: project,
-                        active_tab: active_tab,
-                        activity_tab: activity_tab,
-                        on_add_chapter: on_add_chapter,
-                        on_delete_chapter: on_delete_chapter,
-                        on_rename_chapter: on_rename_chapter,
-                        on_add_tale: on_add_tale,
-                        on_delete_tale: on_delete_tale,
-                        on_rename_tale: on_rename_tale,
-                        on_add_material: on_add_material,
-                        on_delete_material: on_delete_material,
-                        on_rename_material: on_rename_material,
-                        on_open_doc: on_open_doc,
-                    }
-                }
-                if sidebar_visible {
-                    div { id: "resize-sidebar", class: "resize-handle" }
-                }
-                // Editor area
-                div { class: if *show_editor.read() { "editor-pane" } else { "editor-pane hidden" },
-                    // Tab bar
-                    TabBar {
-                        open_tabs: open_tabs,
-                        active_tab: active_tab,
-                        on_close_tab: on_close_tab,
-                        on_open_doc: on_open_doc,
-                    }
-                    // Editor or Welcome
-                    if active_tab.read().is_some() {
-                        Editor {
-                            content: content,
-                            project: project,
-                            global_settings: global_settings,
-                            is_saved: is_saved,
-                            on_save: on_save,
-                            focus_mode: focus_mode,
-                            placeholder: editor_placeholder,
-                        }
-
-                    } else {
-                        if has_project {
-                            div { class: "welcome",
-                                h2 { "{proj_name_for_welcome}" }
-                                p { "サイドバーから章や話を選択してください" }
-                            }
-                        } else {
-                            div { class: "welcome",
-                                h1 { "Chronicle" }
-                                p { "小説執筆支援アプリケーション" }
-                                div { class: "welcome-actions",
-                                    button {
-                                        class: "welcome-btn",
-                                        onclick: move |_| dialog_visible.set(true),
-                                        "新規プロジェクト"
-                                    }
-                                    button {
-                                        class: "welcome-btn",
-                                        onclick: move |_| {
-                                            let mut proj_sig = project.clone();
-                                            let mut notif = save_notification.clone();
-                                            let mut recent = recent_projects.clone();
-        spawn(async move {
-            let dir = pick_folder("プロジェクトフォルダを選択");
-            if let Some(dir) = dir {
-                match crate::fs::project::load_project(&dir) {
-                    Ok(p) => {
-                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
-                        *proj_sig.write() = Some(p);
-                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
-                    }
-                    Err(e) => {
-                        *notif.write() = Some(format!("開くエラー: {}", e));
-                    }
-                }
-            }
-        });
-                                        },
-                                        "プロジェクトを開く"
-                                    }
-                                }
-                                if !recent_list.is_empty() {
-                                    div { class: "welcome-recent",
-                                        h3 { "最近のプロジェクト" }
-                                        ul {
-                                            {recent_list.iter().rev().map(|dir| {
-                                                let d = dir.clone();
-                                                let name = std::path::Path::new(&d)
-                                                    .file_name()
-                                                    .and_then(|n| n.to_str())
-                                                    .unwrap_or(&d)
-                                                    .to_string();
-                                                rsx! {
-                                                    li {
-                                                        class: "welcome-recent-item",
-                                                        onclick: move |_| {
-                                                            let mut proj_sig = project.clone();
-                                                            let mut notif = save_notification.clone();
-                                                            let mut recent = recent_projects.clone();
-                                                            let dir = d.clone();
-                                                              spawn(async move {
-                                                                  match crate::fs::project::load_project(std::path::Path::new(&dir)) {
-                                                                      Ok(p) => {
-                                                                          push_recent(&mut recent.write(), dir.clone());
-                                                                          *proj_sig.write() = Some(p);
-                                                                          fs::settings::save_last_project_path(Some(&dir));
-                                                                      }
-                                                                      Err(e) => {
-                                                                          *notif.write() = Some(format!("開くエラー: {}", e));
-                                                                      }
-                                                                  }
-                                                              });
-                                                         },
-                                                        "{name}"
-                                                    }
-                                                }
-                                            })}
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if preview_visible {
-                    div { id: "resize-preview", class: "resize-handle" }
-                }
-                div { class: if *show_preview.read() { "preview-pane" } else { "preview-pane hidden" },
-                    Preview {
-                        content: content,
-                        writing_mode: writing_mode_str,
-                        project: project,
-                        global_settings: global_settings,
-                    }
-                }
-            }
-            StatusBar {
-                project: project,
-                active_tab: active_tab,
-                tab_content: tab_content,
-                is_saved: is_saved,
-                auto_save_enabled: auto_save_enabled,
-                writing_mode: writing_mode_str,
-                font_size: font_size,
-                on_increase_font: on_increase_font,
-                on_decrease_font: on_decrease_font,
-            }
+            div { class: "desktop-only", {desktop_main_content} }
+            div { class: "mobile-only", {mobile_main_content} }
+            div { class: "desktop-only", {status_bar} }
+            div { class: "mobile-only", {bottom_nav} }
             ProjectDialog {
                 visible: dialog_visible,
                 title: "新規プロジェクト".to_string(),
@@ -1484,6 +1648,61 @@ pub fn App() -> Element {
             ConfirmDialog {
                 pending: pending_delete,
                 on_confirm: on_confirm_delete,
+            }
+            if let Some(pending_doc) = tab_close_pending.read().clone() {
+                div { class: "dialog-overlay",
+                    onclick: move |_| tab_close_pending.set(None),
+                    div { class: "dialog", onclick: |e| e.stop_propagation(),
+                        h2 { "確認" }
+                        div { class: "dialog-body",
+                            p { "保存していない変更があります。" }
+                            p { "保存してから閉じますか？" }
+                        }
+                        div { class: "dialog-actions",
+                            button {
+                                class: "dialog-btn",
+                                onclick: move |_| tab_close_pending.set(None),
+                                "キャンセル"
+                            }
+                            button {
+                                class: "dialog-btn",
+                                onclick: {
+                                    let pd = pending_doc.clone();
+                                    move |_| {
+                                        tab_dirty.write().remove(&pd);
+                                        execute_close_tab(pd.clone());
+                                        tab_close_pending.set(None);
+                                    }
+                                },
+                                "保存せずに閉じる"
+                            }
+                            button {
+                                class: "dialog-btn primary",
+                                onclick: {
+                                    let pd = pending_doc.clone();
+                                    let mut proj = project.clone();
+                                    let mut nf = save_notification.clone();
+                                    let mut ec = execute_close_tab.clone();
+                                    let mut tcp = tab_close_pending.clone();
+                                    move |_| {
+                                        let mut p = proj.write();
+                                        if let Some(ref mut proj2) = p.as_mut() {
+                                            if let Some(text) = tab_content.read().get(&pd).cloned() {
+                                                let _ = save_doc_content(proj2, &pd, &text);
+                                                *nf.write() = Some("保存しました".to_string());
+                                            }
+                                        }
+                                        drop(p);
+                                        tab_dirty.write().remove(&pd);
+                                        ec(pd.clone());
+                                        tcp.set(None);
+                                    }
+                                },
+                                "保存して閉じる"
+                            }
+                        }
+                    }
+                }
             }
             if close_pending.read().is_some() {
                 div { class: "dialog-overlay",
@@ -1581,6 +1800,7 @@ pub fn App() -> Element {
             if let Some(msg) = save_notification.read().as_ref() {
                 div { class: "notification", "{msg}" }
             }
+            {resize_grip}
         }
     }
 }

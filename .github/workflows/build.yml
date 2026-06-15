@@ -1,0 +1,132 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-linux
+          path: target/release/chronicle
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-windows
+          path: target/release/chronicle.exe
+
+  build-macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - run: cargo build --release --target x86_64-apple-darwin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-x86_64-apple-darwin
+          path: target/x86_64-apple-darwin/release/chronicle
+
+  build-macos-aarch64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - run: cargo build --release --target aarch64-apple-darwin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-aarch64-apple-darwin
+          path: target/aarch64-apple-darwin/release/chronicle
+
+  create-macos-universal:
+    needs: [build-macos-x86_64, build-macos-aarch64]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: chronicle-x86_64-apple-darwin
+          path: build/x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: chronicle-aarch64-apple-darwin
+          path: build/aarch64
+      - name: Create universal binary
+        run: |
+          mkdir -p "Chronicle.app/Contents/MacOS"
+          mkdir -p "Chronicle.app/Contents/Resources"
+          lipo -create build/x86_64/chronicle build/aarch64/chronicle \
+            -output "Chronicle.app/Contents/MacOS/chronicle"
+          chmod +x "Chronicle.app/Contents/MacOS/chronicle"
+          cp Chronicle.png "Chronicle.app/Contents/Resources/"
+      - name: Create Info.plist
+        run: |
+          cat > "Chronicle.app/Contents/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>chronicle</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.chronicle.app</string>
+  <key>CFBundleName</key>
+  <string>Chronicle</string>
+  <key>CFBundleDisplayName</key>
+  <string>Chronicle</string>
+  <key>CFBundleVersion</key>
+  <string>${{ github.ref_name }}</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>10.15</string>
+  <key>CFBundleIconFile</key>
+  <string>Chronicle</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+      - name: Create DMG
+        run: |
+          ln -sf /Applications "Chronicle.app/Contents/Applications"
+          hdiutil create -volname "Chronicle" -srcfolder "Chronicle.app" \
+            -ov -format UDZO "Chronicle.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-macos-universal
+          path: |
+            Chronicle.dmg
+            Chronicle.app

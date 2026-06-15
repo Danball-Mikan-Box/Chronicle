@@ -40,6 +40,11 @@
 
 * {
     transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea, button, select, a {
+    touch-action: manipulation;
 }
 
 html.dark {
@@ -102,17 +107,26 @@ input, textarea, button {
     user-select: none;
     -webkit-user-select: none;
     flex-shrink: 0;
+    -webkit-app-region: drag;
+    app-region: drag;
 }
 
 .titlebar-text {
     font-size: 12px;
     color: var(--text-muted);
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .titlebar-controls {
     display: flex;
     gap: 4px;
+    flex-shrink: 0;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
 }
 
 .titlebar-btn {
@@ -1622,49 +1636,165 @@ input[type="range"] {
     border-top: 1px solid var(--border-light);
 }
 
+/* ── Bottom navigation (narrow desktop / Android) ── */
+.mobile-nav {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg-toolbar);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 64px;
+}
+.mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 22px;
+    cursor: pointer;
+    border-top: 3px solid transparent;
+    padding: 6px 4px;
+    min-height: 48px;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+.mobile-nav-btn.active {
+    color: var(--text-secondary);
+    background: var(--bg-editor);
+    border-top-color: var(--bg-active);
+}
+.mobile-nav-btn:hover {
+    background: var(--bg-hover);
+}
+.mobile-nav-label {
+    display: block;
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+/* ── Android page layout ── */
+.main-content.mobile {
+    flex-direction: column !important;
+}
+.main-content.mobile .sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 !important;
+    max-height: none !important;
+    border-right: none !important;
+}
+.main-content.mobile .editor-pane {
+    flex: 1 !important;
+    min-height: 0;
+}
+.main-content.mobile .preview-pane {
+    width: 100% !important;
+    flex: 1 !important;
+    max-height: none !important;
+    border-left: none !important;
+    border-top: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 16px;
+}
+.main-content.mobile .preview-pane > .preview {
+    overflow: visible;
+}
+
+/* ── Desktop / Mobile layout toggle ── */
+.desktop-only { display: contents; }
+.mobile-only { display: none; }
+
+/* ── Toolbar overflow menu ── */
+.toolbar-overflow-btn { display: none; }
+.menu-dropdown {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+    background: rgba(0,0,0,0.3);
+}
+.menu-dropdown.open { display: block; }
+.menu-dropdown-panel {
+    position: absolute;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--bg-dialog);
+    border-radius: 12px 12px 0 0;
+    padding: 8px 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+}
+.menu-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 15px;
+    cursor: pointer;
+    text-align: left;
+    gap: 12px;
+}
+.menu-dropdown-item:hover {
+    background: var(--bg-hover);
+}
+.menu-dropdown-item:active {
+    background: var(--bg-active);
+    color: var(--text-active);
+}
+
 /* ── Mobile / Small-screen layout ── */
 @media (max-width: 768px) {
-    .titlebar { display: none !important }
+    .desktop-only { display: none !important; }
+    .mobile-only { display: contents !important; }
+    .resize-grip { display: none !important }
 
     .toolbar {
-        padding: 4px 8px;
-        gap: 4px;
+        padding: 6px 10px;
+        gap: 6px;
     }
-    .toolbar h1 { font-size: 14px; margin-right: 4px }
-    .toolbar .project-name { font-size: 11px; max-width: 100px; overflow: hidden; text-overflow: ellipsis }
-    .toolbar-btn { font-size: 11px; padding: 4px 6px; height: 26px }
-    .toolbar .separator { margin: 0 2px }
-    .toolbar-center { flex-wrap: nowrap; overflow-x: auto; gap: 2px }
+    .toolbar h1 { font-size: 16px; margin-right: 4px }
+    .toolbar .project-name { font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis }
+    .toolbar-btn { font-size: 15px; padding: 10px 14px; height: 44px; min-width: 44px }
+    .toolbar .separator { margin: 0 4px; display: none; }
+    .toolbar-center { flex-wrap: nowrap; overflow-x: auto; gap: 6px; -webkit-overflow-scrolling: touch }
     .toolbar-right { display: none }
+    .toolbar-overflow-btn { display: inline-flex; }
+    .toolbar-btn.overflow-hidden { display: none; }
+    .font-size-controls { display: none; }
+
+    .format-bar { padding: 8px 10px; gap: 4px; }
+    .fmt-btn { padding: 10px 14px; font-size: 15px; min-height: 44px; }
+    .fmt-sep { height: 24px; margin: 0 6px; }
 
     .main-content {
-        flex-direction: column !important;
-        overflow: auto;
-    }
-    .main-content.preview-bottom { flex-direction: column !important }
-
-    .main-content .sidebar {
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: 0 0 auto !important;
-        max-height: 40vh;
-        overflow-y: auto;
-        border-right: none !important;
-        border-bottom: 1px solid var(--sidebar-border);
-    }
-    .main-content.sidebar-right .sidebar {
-        border-left: none !important;
-        border-bottom: 1px solid var(--sidebar-border);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .resize-handle { display: none !important }
 
     .editor-pane {
         flex: 1 1 auto !important;
-        min-height: 200px;
+        min-width: 150px;
     }
     .editor {
-        padding: 8px 12px;
+        padding: 12px 16px;
         font-size: 16px;
     }
     .formatting-bar {
@@ -1672,31 +1802,25 @@ input[type="range"] {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         gap: 2px;
-        padding: 4px 8px;
+        padding: 6px 8px;
     }
-    .formatting-bar button { font-size: 11px; padding: 4px 6px }
+    .formatting-bar button { font-size: 11px; padding: 6px 8px; min-height: 32px }
 
     .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch }
-    .tab { font-size: 12px; padding: 6px 10px }
+    .tab { font-size: 12px; padding: 8px 12px; min-height: 36px }
 
     .preview-pane {
-        width: 100% !important;
-        flex: 0 0 auto !important;
-        max-height: 50vh;
-        border-left: none !important;
-        border-top: 1px solid var(--border);
+        min-width: 150px;
     }
     .preview {
-        padding: 8px 12px;
+        padding: 12px 16px;
         font-size: 15px;
-    }
-    .main-content.preview-bottom .preview-pane {
-        max-height: 40vh;
     }
 
     .status-bar {
         font-size: 11px;
-        padding: 4px 8px;
+        padding: 6px 12px;
+        min-height: 32px;
     }
 
     .stats { gap: 4px }
@@ -1710,9 +1834,59 @@ input[type="range"] {
 
     .dialog-body { padding: 12px }
     .dialog-input { font-size: 14px }
+    .dialog-btn { padding: 10px 20px; min-height: 40px }
 
     .welcome h1 { font-size: 24px }
     .welcome p { font-size: 14px }
+    .welcome-btn { padding: 12px 24px; min-height: 44px; font-size: 14px }
+
+    .sidebar-titlebar-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch }
+    .titlebar-tab { padding: 8px 14px; min-height: 40px; font-size: 13px }
+
+    .chapter-header { padding: 8px 12px 8px 8px; min-height: 40px }
+    .chapter-title { font-size: 14px; padding: 4px 0 }
+    .tale-content { padding: 6px 12px 6px 28px; min-height: 40px }
+    .tale-title { font-size: 13px; padding: 4px 0 }
+    .material-content { padding: 8px 12px; min-height: 40px }
+    .material-title { font-size: 13px; padding: 4px 0 }
+
+    .status-bar { display: none }
+    .mobile-nav { height: 60px }
+
+    .sidebar-del-btn,
+    .sidebar-rename-btn {
+        opacity: 0.5;
+        width: 28px;
+        height: 28px;
+        font-size: 16px;
+    }
+    .chapter-header:hover .sidebar-del-btn,
+    .tale-content:hover .sidebar-del-btn,
+    .material-item:hover .sidebar-del-btn,
+    .chapter-header:hover .sidebar-rename-btn,
+    .tale-content:hover .sidebar-rename-btn,
+    .material-item:hover .sidebar-rename-btn {
+        opacity: 0.5;
+    }
+    .sidebar-del-btn:active,
+    .sidebar-rename-btn:active {
+        opacity: 1;
+    }
+
+    .sidebar-add-btn { width: 28px; height: 28px; font-size: 16px }
+    .sidebar-action-btn { padding: 10px 0; min-height: 40px; font-size: 13px }
+
+    .tab { padding: 8px 12px; min-height: 36px }
+    .tab-label { max-width: 120px }
+    .tab-close { width: 22px; height: 22px; font-size: 14px }
+
+    .notification { bottom: 48px; padding: 12px 24px; font-size: 14px }
+}
+
+@media (max-width: 640px) {
+    .titlebar { display: none }
+    .toolbar { padding: 4px 8px }
+    .toolbar h1 { font-size: 14px }
 }
 
 @media (max-width: 480px) {
@@ -1720,11 +1894,51 @@ input[type="range"] {
     .preview-pane { max-height: 40vh }
     .toolbar-center .separator { display: none }
     .toolbar .toolbar-right { display: none }
-    .toolbar-btn { font-size: 10px; padding: 3px 4px; height: 24px }
-    .tab { font-size: 11px; padding: 4px 8px }
+    .toolbar-btn { font-size: 10px; padding: 4px 6px; height: 28px; min-width: 28px }
+    .tab { font-size: 11px; padding: 6px 10px }
+    .editor { padding: 8px 12px }
+    .tale-content { padding: 6px 12px 6px 24px }
+    .sidebar-action-btn { padding: 8px 0 }
+    .titlebar { padding: 0 4px }
+    .titlebar-btn { width: 26px; height: 20px; font-size: 11px }
+}
+
+@media (max-width: 400px) {
+    .titlebar-text { display: none }
+    .titlebar { justify-content: flex-end }
+}
+
+/* ── Resize grip (desktop, bottom-right corner) ── */
+.resize-grip {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    z-index: 1001;
+    pointer-events: none;
+}
+.resize-grip::after {
+    content: "";
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-muted);
+    border-bottom: 2px solid var(--text-muted);
+    opacity: 0.4;
 }
 
 /* ── Safe area for mobile notches ── */
 @supports (padding: env(safe-area-inset-top)) {
-    .app { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom) }
+    .app {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
 }
+
+

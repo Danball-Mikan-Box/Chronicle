@@ -19,10 +19,14 @@ fn launch_desktop() {
         dioxus_desktop::tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
     })();
 
-    let cfg = dioxus_desktop::Config::new().with_window(
+    let cfg = dioxus_desktop::Config::new()
+        .with_menu(None)
+        .with_window(
         dioxus_desktop::WindowBuilder::new()
             .with_title("Chronicle")
-            .with_decorations(false)
+            .with_decorations(true)
+            .with_resizable(true)
+            .with_min_inner_size(dioxus_desktop::tao::dpi::LogicalSize::new(640.0, 480.0))
             .with_window_icon(icon),
     );
 

@@ -27,7 +27,13 @@ zip = "2"
 dioxus-mobile = "0.6"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.14", default-features = false, features = ["tokio"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd = { version = "0.14", default-features = false, features = ["gtk3", "tokio"] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2"
 
 [package.metadata.deb]
 maintainer = "Chronicle"

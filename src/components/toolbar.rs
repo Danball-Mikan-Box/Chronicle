@@ -1,6 +1,4 @@
 use dioxus::prelude::*;
-#[cfg(not(target_os = "android"))]
-use dioxus_desktop::use_window;
 
 use crate::model::project::{Project, WritingMode};
 #[cfg(not(target_os = "android"))]
@@ -31,11 +29,11 @@ pub fn Toolbar(
     on_increase_font: EventHandler<()>,
     on_decrease_font: EventHandler<()>,
     on_settings: EventHandler<()>,
-    on_close_window: EventHandler<()>,
 ) -> Element {
     let text = content.read().clone();
     let file_char_count = text.chars().filter(|c| !c.is_whitespace()).count();
     let today_char_count = *daily_progress.read();
+    let mut show_overflow = use_signal(|| false);
 
     let reading_time = if file_char_count > 0 {
         let mins = (file_char_count as f64 / 400.0).ceil() as usize;
@@ -52,37 +50,13 @@ pub fn Toolbar(
         0
     };
 
-    // Desktop title bar – only compiled for non‑Android targets
+    // Desktop title bar – shows version info; window controls are in the native titlebar
     #[cfg(not(target_os = "android"))]
     let titlebar = {
-        let desktop = use_window();
-        let min_btn = desktop.clone();
-        let max_btn = desktop.clone();
         rsx! {
             div {
                 class: "titlebar",
-                onmousedown: move |_| { desktop.drag(); },
                 span { class: "titlebar-text", "Chronicle v{VERSION}" }
-                div { class: "titlebar-controls",
-                    button {
-                        class: "titlebar-btn",
-                        onmousedown: |e| e.stop_propagation(),
-                        onclick: move |_| { min_btn.set_minimized(true); },
-                        "\u{2014}"
-                    }
-                    button {
-                        class: "titlebar-btn",
-                        onmousedown: |e| e.stop_propagation(),
-                        onclick: move |_| { max_btn.toggle_maximized(); },
-                        "\u{25A1}"
-                    }
-                    button {
-                        class: "titlebar-btn titlebar-close",
-                        onmousedown: |e| e.stop_propagation(),
-                        onclick: move |_| on_close_window.call(()),
-                        "\u{2715}"
-                    }
-                }
             }
         }
     };
@@ -100,27 +74,47 @@ pub fn Toolbar(
                 }
             }
             div { class: "toolbar-center",
-                button { class: "toolbar-btn", onclick: move |_| on_new_project.call(()), "新規" }
-                button { class: "toolbar-btn", onclick: move |_| on_open_project.call(()), "開く" }
-                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_close_project.call(()), "閉じる" }
-                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_save.call(()), "保存" }
-                button { class: "toolbar-btn", onclick: move |_| on_settings.call(()), "設定" }
+                button { class: "toolbar-btn keep-visible", disabled: proj_name.is_empty(), onclick: move |_| on_save.call(()), "保存" }
+                button { class: "toolbar-btn keep-visible", onclick: move |_| on_settings.call(()), "設定" }
+                button { class: "toolbar-btn toolbar-overflow-btn", onclick: move |_| { let v = !*show_overflow.read(); show_overflow.set(v); }, "\u{22EE}" }
+                button { class: "toolbar-btn overflow-hidden", onclick: move |_| on_new_project.call(()), "新規" }
+                button { class: "toolbar-btn overflow-hidden", onclick: move |_| on_open_project.call(()), "開く" }
+                button { class: "toolbar-btn overflow-hidden", disabled: proj_name.is_empty(), onclick: move |_| on_close_project.call(()), "閉じる" }
                 span { class: "separator" }
-                button { class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn active" } else { "toolbar-btn" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Vertical), "縦書" }
-                button { class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn active" } else { "toolbar-btn" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Horizontal), "横書" }
+                button { class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Vertical), "縦書" }
+                button { class: if *writing_mode.read() == WritingMode::Horizontal { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Horizontal), "横書" }
                 span { class: "separator" }
-                button { class: "toolbar-btn", disabled: proj_name.is_empty(), onclick: move |_| on_export.call(()), "出力" }
-                button { class: if is_dark { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_dark.call(()), if is_dark { "\u{2601}" } else { "\u{2600}" } }
+                button { class: "toolbar-btn overflow-hidden", disabled: proj_name.is_empty(), onclick: move |_| on_export.call(()), "出力" }
+                button { class: if is_dark { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, onclick: move |_| on_toggle_dark.call(()), if is_dark { "\u{2601}" } else { "\u{2600}" } }
                 span { class: "separator" }
-                button { class: if show_sidebar { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_sidebar.call(()), title: "サイドバー", "\u{2630}" }
-                button { class: if show_editor { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_editor.call(()), title: "エディタ", "E" }
-                button { class: if show_preview { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_preview.call(()), title: "プレビュー", "\u{1F441}" }
-                button { class: if focus_mode { "toolbar-btn active" } else { "toolbar-btn" }, onclick: move |_| on_toggle_focus_mode.call(()), title: "集中モード", "\u{26F6}" }
+                button { class: if show_sidebar { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, onclick: move |_| on_toggle_sidebar.call(()), "\u{2630}" }
+                button { class: if show_editor { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, onclick: move |_| on_toggle_editor.call(()), "E" }
+                button { class: if show_preview { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, onclick: move |_| on_toggle_preview.call(()), "\u{1F441}" }
+                button { class: if focus_mode { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, onclick: move |_| on_toggle_focus_mode.call(()), "\u{26F6}" }
                 span { class: "separator" }
                 div { class: "font-size-controls",
                     button { class: "toolbar-btn", onclick: move |_| on_decrease_font.call(()), title: "文字を小さく", "A-" }
                     span { class: "font-size-value", "{font_size}" }
                     button { class: "toolbar-btn", onclick: move |_| on_increase_font.call(()), title: "文字を大きく", "A+" }
+                }
+            }
+            if *show_overflow.read() {
+                div {
+                    class: "menu-dropdown open",
+                    onclick: move |_| show_overflow.set(false),
+                    div { class: "menu-dropdown-panel", onclick: |e| e.stop_propagation(),
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_new_project.call(()); show_overflow.set(false); }, "新規" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_open_project.call(()); show_overflow.set(false); }, "開く" }
+                        button { class: "menu-dropdown-item", disabled: proj_name.is_empty(), onclick: move |_| { on_close_project.call(()); show_overflow.set(false); }, "閉じる" }
+                        button { class: "menu-dropdown-item", disabled: proj_name.is_empty(), onclick: move |_| { on_export.call(()); show_overflow.set(false); }, "出力" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_dark.call(()); show_overflow.set(false); }, if is_dark { "\u{2601} ライト" } else { "\u{2600} ダーク" } }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_sidebar.call(()); show_overflow.set(false); }, "\u{2630} サイドバー" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_editor.call(()); show_overflow.set(false); }, "E エディタ" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_preview.call(()); show_overflow.set(false); }, "\u{1F441} プレビュー" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_focus_mode.call(()); show_overflow.set(false); }, "\u{26F6} 集中" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_decrease_font.call(()); show_overflow.set(false); }, "A- 縮小" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_increase_font.call(()); show_overflow.set(false); }, "A+ 拡大" }
+                    }
                 }
             }
             div { class: "toolbar-right",

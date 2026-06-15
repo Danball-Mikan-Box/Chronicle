@@ -302,6 +302,14 @@ pub enum ActivityTab {
     Materials,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
+pub enum MobilePage {
+    Files,
+    Editor,
+    Preview,
+}
+
 // ── Document reference ──
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

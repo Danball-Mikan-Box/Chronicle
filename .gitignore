@@ -11,3 +11,7 @@ Thumbs.db
 /target
 /.antigravitycli
 chronicle.keystore
+
+# Generated files
+Chronicle.ico
+icon.rc
