@@ -261,7 +261,7 @@ jobs:
           fail_on_unmatched_files: false
 
   android:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -280,9 +280,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
       - name: Install Android targets
         run: |
           rustup target add aarch64-linux-android
@@ -300,7 +297,6 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             libxdo-dev \
-            libssl-dev \
             file
 
       - name: Install Java
@@ -311,8 +307,6 @@ jobs:
 
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11076708
 
       - name: Build release
         run: cargo build --release
@@ -320,7 +314,7 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
-        run: cargo install dioxus-cli
+        run: cargo install cargo-binstall && cargo binstall dioxus-cli -y
 
       - name: Build Android APK
         run: dx build --platform android --release
