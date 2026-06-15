@@ -8,3 +8,4 @@ base_path = "/"
 
 [bundle]
 identifier = "com.chronicle.app"
+icon = ["Chronicle.png"]
