@@ -20,7 +20,9 @@ use crate::components::editor::Editor;
 use crate::export::ExportFormat;
 use crate::components::preview::Preview;
 use crate::components::sidebar::Sidebar;
+#[cfg(not(target_os = "android"))]
 use crate::components::status_bar::StatusBar;
+#[cfg(not(target_os = "android"))]
 use crate::components::tab_bar::TabBar;
 use crate::components::toolbar::Toolbar;
 use crate::fs;
@@ -268,6 +270,7 @@ pub fn App() -> Element {
         WritingMode::Horizontal => "horizontal".to_string(),
     });
 
+    #[cfg(not(target_os = "android"))]
     let main_class = use_memo(move || {
         let mut c = "main-content".to_string();
         if *focus_mode.read() {
@@ -563,6 +566,7 @@ pub fn App() -> Element {
         }
     };
 
+    #[cfg(not(target_os = "android"))]
     let on_close_tab = {
         let tab_dirty = tab_dirty.clone();
         let mut tab_close_pending = tab_close_pending.clone();
@@ -1346,6 +1350,7 @@ pub fn App() -> Element {
     let sidebar_visible = *show_sidebar.read();
     let preview_visible = *show_preview.read();
     let editor_visible = *show_editor.read();
+    #[cfg(not(target_os = "android"))]
     let recent_list = recent_projects.read().clone();
     let has_project = project.read().is_some();
     let proj_name_for_welcome = project.read().as_ref().map(|p| p.name.clone()).unwrap_or_default();

@@ -327,6 +327,7 @@ pub enum DocRef {
 }
 
 impl DocRef {
+    #[allow(dead_code)]
     pub fn short_label(&self) -> String {
         match self {
             DocRef::Tale { tale_title, .. } => tale_title.clone(),
