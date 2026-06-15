@@ -6,9 +6,7 @@ fn get_settings_path() -> PathBuf {
     #[cfg(target_os = "android")]
     {
         // On Android, use the app's internal data directory
-        let data_dir = std::env::var("CHRONICLE_DATA_DIR")
-            .unwrap_or_else(|_| "/data/data/com.chronicle.app/files".to_string());
-        let app_dir = PathBuf::from(data_dir);
+        let app_dir = super::android_storage_dir();
         let _ = std::fs::create_dir_all(&app_dir);
         app_dir.join("settings.json")
     }

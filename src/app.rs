@@ -40,9 +40,7 @@ fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
 
 #[cfg(target_os = "android")]
 fn android_storage_dir() -> std::path::PathBuf {
-    let data_dir = std::env::var("CHRONICLE_DATA_DIR")
-        .unwrap_or_else(|_| "/data/data/com.chronicle.app/files".to_string());
-    std::path::PathBuf::from(data_dir)
+    fs::android_storage_dir()
 }
 
 #[cfg(target_os = "android")]
