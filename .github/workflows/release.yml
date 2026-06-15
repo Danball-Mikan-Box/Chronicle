@@ -359,7 +359,7 @@ jobs:
       - name: Set version in Cargo.toml
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+          sed -i '' 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
       - name: Build
         run: cargo build --release --target x86_64-apple-darwin
         env:
@@ -384,7 +384,7 @@ jobs:
       - name: Set version in Cargo.toml
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+          sed -i '' 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
       - name: Build
         run: cargo build --release --target aarch64-apple-darwin
         env:
