@@ -45,7 +45,7 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             libxdo-dev \
-            rpm \
+            libssl-dev \
             file
 
       - name: Build release
@@ -280,6 +280,9 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Install Android targets
         run: |
           rustup target add aarch64-linux-android
@@ -297,6 +300,7 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             libxdo-dev \
+            libssl-dev \
             file
 
       - name: Install Java
@@ -316,7 +320,7 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
-        run: cargo install cargo-binstall && cargo binstall dioxus-cli -y
+        run: cargo install dioxus-cli
 
       - name: Build Android APK
         run: dx build --platform android --release
