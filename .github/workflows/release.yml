@@ -262,12 +262,13 @@ jobs:
       - name: Build .rpm
         run: cargo generate-rpm
 
-- name: Upload RPM artifacts
-          uses: actions/upload-artifact@v4
-          with:
-            name: rpm-artifacts
-            path: target/generate-rpm/*.rpm
-            if-no-files-found: error
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-artifacts
+          path: target/generate-rpm/*.rpm
+          if-no-files-found: error
+
 
   release-linux-appimage:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
