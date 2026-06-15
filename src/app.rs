@@ -13,6 +13,7 @@ use crate::components::dialog::{ConfirmDialog, ExportDialog, PendingDelete, Proj
 #[derive(Clone)]
 enum CloseAction {
     CloseProject,
+    #[allow(dead_code)]
     CloseWindow,
 }
 use crate::components::editor::Editor;
