@@ -206,13 +206,14 @@ jobs:
           cp Chronicle.svg chronicle-$VERSION-x86_64-linux/
           tar czf chronicle-$VERSION-x86_64-linux.tar.gz chronicle-$VERSION-x86_64-linux/
 
-      - name: Upload Linux artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            target/debian/*.deb
-            chronicle-*.tar.gz
-          fail_on_unmatched_files: false
+- name: Upload Linux artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: linux-artifacts
+            path: |
+              target/debian/*.deb
+              chronicle-*.tar.gz
+            if-no-files-found: error
 
   release-linux-rpm:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -261,11 +262,12 @@ jobs:
       - name: Build .rpm
         run: cargo generate-rpm
 
-      - name: Upload RPM
-        uses: softprops/action-gh-release@v2
-        with:
-          files: target/generate-rpm/*.rpm
-          fail_on_unmatched_files: false
+- name: Upload RPM artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: rpm-artifacts
+            path: target/generate-rpm/*.rpm
+            if-no-files-found: error
 
   release-linux-appimage:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -339,11 +341,12 @@ jobs:
           ./appimagetool AppDir "chronicle-$VERSION-x86_64.AppImage" 2>&1 || true
           ls -la chronicle-*.AppImage 2>/dev/null || true
 
-      - name: Upload AppImage
-        uses: softprops/action-gh-release@v2
-        with:
-          files: chronicle-*.AppImage
-          fail_on_unmatched_files: false
+- name: Upload AppImage artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: appimage-artifacts
+            path: chronicle-*.AppImage
+            if-no-files-found: error
 
   release-macos-x86_64:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -457,12 +460,12 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           hdiutil create -volname "Chronicle" -srcfolder "Chronicle.app" \
             -ov -format UDZO "chronicle-$VERSION-macos-universal.dmg"
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            chronicle-*-macos-universal.dmg
-          fail_on_unmatched_files: false
+- name: Upload macOS DMG artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: macos-dmg-artifact
+            path: chronicle-*-macos-universal.dmg
+            if-no-files-found: error
 
   release-windows:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -511,12 +514,14 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           Compress-Archive -Path target/release/chronicle.exe,Chronicle.png,Chronicle.svg -DestinationPath chronicle-$version-x86_64-windows.zip
 
-      - name: Upload Windows artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            target/wix/*.msi
-            chronicle-*.zip
+- name: Upload Windows artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: windows-artifact
+            path: |
+              target/wix/*.msi
+              chronicle-*.zip
+            if-no-files-found: error
           fail_on_unmatched_files: false
 
   release-android:
@@ -655,8 +660,9 @@ jobs:
           fi
           mv "$APK" target/dx/Chronicle-release.apk
 
-      - name: Upload APK
-        uses: softprops/action-gh-release@v2
-        with:
-          files: target/dx/Chronicle-release.apk
-          fail_on_unmatched_files: false
+- name: Upload Android APK artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: android-artifact
+            path: target/dx/Chronicle-release.apk
+            if-no-files-found: error

@@ -35,6 +35,11 @@ rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "t
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "2"
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1"
+
+
 [package.metadata.deb]
 maintainer = "Chronicle"
 depends = "libgtk-3-0, libwebkit2gtk-4.1-0, libjavascriptcoregtk-4.1-0, libcairo2, libpango-1.0-0, libgdk-pixbuf-2.0-0, libglib2.0-0"

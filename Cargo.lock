@@ -523,6 +523,8 @@ dependencies = [
  "embed-resource",
  "futures",
  "image",
+ "jni",
+ "ndk-context",
  "pulldown-cmark",
  "rfd",
  "serde",
