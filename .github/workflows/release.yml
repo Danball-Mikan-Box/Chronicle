@@ -400,6 +400,7 @@ jobs:
     needs: [release-macos-x86_64, release-macos-aarch64]
     runs-on: macos-14
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: chronicle-x86_64-apple-darwin
