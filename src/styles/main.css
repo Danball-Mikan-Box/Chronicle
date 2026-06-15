@@ -460,7 +460,7 @@ input, textarea, button {
 .resize-handle {
     width: 5px;
     cursor: col-resize;
-    background: var(--bg-editor);
+    background: transparent;
     flex-shrink: 0;
     position: relative;
     z-index: 10;
@@ -478,7 +478,6 @@ input, textarea, button {
     flex-direction: column;
     min-width: 200px;
     overflow: hidden;
-    background: var(--bg-editor);
 }
 
 /* Welcome screen */
@@ -653,6 +652,7 @@ input, textarea, button {
     outline: none;
     tab-size: 2;
     width: 100%;
+    margin: 0 auto;
 }
 
 .editor.indent-paragraphs {
