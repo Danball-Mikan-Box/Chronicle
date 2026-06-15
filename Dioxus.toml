@@ -6,15 +6,3 @@ version = "0.1.0"
 title = "Chronicle"
 base_path = "/"
 base_url = ""
-
-[android]
-apk_name = "Chronicle"
-
-[android.app]
-package = "com.chronicle.app"
-
-[android.signing]
-keystore_path = "chronicle.keystore"
-keystore_password = { env = "ANDROID_KEYSTORE_PASSWORD" }
-key_alias = { env = "ANDROID_KEY_ALIAS" }
-key_password = { env = "ANDROID_KEY_PASSWORD" }

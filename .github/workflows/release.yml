@@ -314,7 +314,8 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
-        run: cargo install cargo-binstall && cargo binstall dioxus-cli -y
+        # Pin to 0.6.x to match the project's dioxus 0.6 dependency
+        run: cargo install cargo-binstall && cargo binstall dioxus-cli@0.6.3 -y
 
       - name: Decode keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > chronicle.keystore
@@ -323,9 +324,21 @@ jobs:
         run: dx build --platform android --release
         env:
           GIT_TAG: ${{ github.ref_name }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign Android APK
+        run: |
+          APK=$(find target/dx -name "app-debug.apk" -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "APK not found in target/dx"
+            exit 1
+          fi
+          echo "Signing APK: $APK"
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+            -keystore chronicle.keystore \
+            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            "$APK" \
+            "${{ secrets.ANDROID_KEY_ALIAS }}"
 
       - name: Upload APK
         uses: softprops/action-gh-release@v2
