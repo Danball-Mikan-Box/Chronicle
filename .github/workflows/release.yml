@@ -235,6 +235,17 @@ jobs:
         env:
           GIT_TAG: ${{ github.ref_name }}
 
+      - name: Install WiX Toolset
+        run: choco install wixtoolset --version=3.14.1 -y --limit-output
+
+      - name: Install cargo-wix
+        run: cargo install cargo-wix
+
+      - name: Build MSI
+        run: |
+          cargo wix init
+          cargo wix build
+
       - name: Build portable zip
         shell: pwsh
         run: |
@@ -244,7 +255,9 @@ jobs:
       - name: Upload Windows artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: chronicle-*.zip
+          files: |
+            target/wix/*.msi
+            chronicle-*.zip
           fail_on_unmatched_files: false
 
   android:

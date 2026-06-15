@@ -46,13 +46,12 @@ assets = [
     ["Chronicle.svg", "usr/share/icons/hicolor/scalable/apps/chronicle.svg", "644"],
 ]
 
-[package.metadata.generate_rpm]
+[package.metadata.generate-rpm]
 assets = [
-    { source = "target/release/chronicle", dest_dir = "/usr/bin", mode = "755" },
-    { source = "Chronicle.png", dest_dir = "/usr/share/icons/hicolor/64x64/apps", mode = "644" },
-    { source = "Chronicle.svg", dest_dir = "/usr/share/icons/hicolor/scalable/apps", mode = "644" },
+    { source = "target/release/chronicle", dest = "/usr/bin/chronicle", mode = "755" },
+    { source = "Chronicle.png", dest = "/usr/share/icons/hicolor/64x64/apps/chronicle.png", mode = "644" },
+    { source = "Chronicle.svg", dest = "/usr/share/icons/hicolor/scalable/apps/chronicle.svg", mode = "644" },
 ]
-requires = ["libgtk-3", "webkit2gtk4.1", "libcairo2", "pango", "gdk-pixbuf2", "glib2"]
 
 [package.metadata.wix]
 upgrade-guid = "C39B8E5A-1E2F-4A7B-9D6C-8F3A2E5B1D4C"
