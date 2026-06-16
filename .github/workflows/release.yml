@@ -618,6 +618,9 @@ jobs:
           for size, density in mipmaps.items():
               dst = os.path.join(res_dir, f"mipmap-{density}")
               os.makedirs(dst, exist_ok=True)
+              for f in os.listdir(dst):
+                  if f.startswith("ic_launcher"):
+                      os.remove(os.path.join(dst, f))
               for name in ["ic_launcher.png", "ic_launcher_round.png"]:
                   shutil.copy(f"icon-{size}.png", os.path.join(dst, name))
           v26 = os.path.join(res_dir, "mipmap-anydpi-v26")
