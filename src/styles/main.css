@@ -1628,6 +1628,31 @@ input[type="range"] {
     cursor: col-resize;
 }
 
+.project-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.project-picker-item {
+    padding: 12px 16px;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    background: var(--bg-btn);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.project-picker-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+.project-picker-name {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
 .dialog-version {
     text-align: center;
     padding: 8px 16px;

@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 
 
-use crate::components::dialog::{ConfirmDialog, ExportDialog, PendingDelete, ProjectDialog, RenameDialog, SettingsDialog};
+use crate::components::dialog::{ConfirmDialog, ExportDialog, PendingDelete, ProjectDialog, ProjectPickerDialog, RenameDialog, SettingsDialog};
 
 #[derive(Clone)]
 enum CloseAction {
@@ -60,12 +60,47 @@ fn pick_folder(title: &str) -> Option<std::path::PathBuf> {
 #[cfg(target_os = "android")]
 fn pick_folder(_title: &str) -> Option<std::path::PathBuf> {
     let dir = android_storage_dir().join("projects");
-    let _ = std::fs::create_dir_all(&dir);
+    eprintln!("[chronicle] pick_folder: {}", dir.display());
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("[chronicle] pick_folder: create_dir_all error: {}", e);
+    }
     Some(dir)
 }
 
-/// On Android, scan `dir` for valid project subdirectories.
-/// On desktop, return `dir` as-is.
+/// Scan for available projects in the Android storage directory.
+#[cfg(target_os = "android")]
+fn scan_android_projects() -> Vec<(String, String)> {
+    let dir = android_storage_dir().join("projects");
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+    entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| {
+            let proj_file = e.path().join("chronicle.json");
+            if !proj_file.exists() {
+                return None;
+            }
+            let path_str = e.path().to_string_lossy().to_string();
+            let name = std::fs::read_to_string(&proj_file)
+                .ok()
+                .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+                .and_then(|v| v.get("name").and_then(|n| n.as_str().map(|s| s.to_string())))
+                .unwrap_or_else(|| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("無題")
+                        .to_string()
+                });
+            Some((name, path_str))
+        })
+        .collect()
+}
+
+/// On Android, scan `dir` for valid project subdirectories and return the most recent.
 #[cfg(target_os = "android")]
 fn resolve_project_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     if dir.join("chronicle.json").exists() {
@@ -108,8 +143,21 @@ fn save_doc_content(p: &Project, doc: &DocRef, content: &str) -> Result<(), Stri
     }
 }
 
+fn recent_path() -> std::path::PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        let dir = android_storage_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("recent.json")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::env::temp_dir().join("chronicle_recent.json")
+    }
+}
+
 fn load_recent() -> Vec<String> {
-    let path = std::env::temp_dir().join("chronicle_recent.json");
+    let path = recent_path();
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -117,7 +165,7 @@ fn load_recent() -> Vec<String> {
 }
 
 fn save_recent(list: &[String]) {
-    let path = std::env::temp_dir().join("chronicle_recent.json");
+    let path = recent_path();
     if let Ok(json) = serde_json::to_string(list) {
         let _ = std::fs::write(&path, &json);
     }
@@ -191,6 +239,8 @@ pub fn App() -> Element {
 
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
+    let mut project_picker_visible = use_signal(|| false);
+    let project_list: Signal<Vec<(String, String)>> = use_signal(Vec::new);
     let rename_dialog_visible = use_signal(|| false);
     let mut export_dialog_visible = use_signal(|| false);
     let rename_target = use_signal(|| (String::new(), String::new()));
@@ -689,10 +739,13 @@ pub fn App() -> Element {
         let mut recent = recent_projects.clone();
         let mut other_files_total = other_files_total.clone();
         spawn(async move {
+            eprintln!("[chronicle] on_confirm_new: name={}, author={}", name, author);
             let dir = pick_folder("プロジェクトを作成する場所を選択");
             if let Some(dir) = dir {
+                eprintln!("[chronicle] on_confirm_new: creating project in dir={}", dir.display());
                 match fs::project::create_project(&name, &dir) {
                     Ok(mut p) => {
+                        eprintln!("[chronicle] on_confirm_new: created OK, root={}", p.root_dir.display());
                         p.settings.author = author;
                         handle_daily_stats(&mut p);
                         let _ = fs::project::save_project(&p);
@@ -703,9 +756,12 @@ pub fn App() -> Element {
                         fs::settings::save_last_project_path(Some(&project_dir));
                     }
                     Err(e) => {
+                        eprintln!("[chronicle] on_confirm_new: creation FAILED: {}", e);
                         *notif.write() = Some(format!("作成エラー: {}", e));
                     }
                 }
+            } else {
+                eprintln!("[chronicle] on_confirm_new: pick_folder returned None");
             }
         });
     };
@@ -715,28 +771,97 @@ pub fn App() -> Element {
         let mut notif = save_notification.clone();
         let mut recent = recent_projects.clone();
         let mut other_files_total = other_files_total.clone();
+        let mut picker_visible = project_picker_visible.clone();
+        let mut p_list = project_list.clone();
         spawn(async move {
-            let dir = pick_folder("プロジェクトフォルダを選択");
-            if let Some(dir) = dir {
-                if let Some(project_dir) = resolve_project_dir(&dir) {
-                    match fs::project::load_project(&project_dir) {
+            #[cfg(target_os = "android")]
+            {
+                let projects = scan_android_projects();
+                if projects.is_empty() {
+                    eprintln!("[chronicle] on_open_project: no projects found");
+                    *notif.write() = Some("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());
+                } else if projects.len() == 1 {
+                    let (_name, path) = projects.into_iter().next().unwrap();
+                    eprintln!("[chronicle] on_open_project: auto-loading single project: {}", path);
+                    match fs::project::load_project(std::path::Path::new(&path)) {
                         Ok(mut p) => {
                             handle_daily_stats(&mut p);
-                            let pd = project_dir.to_string_lossy().to_string();
-                            push_recent(&mut recent.write(), pd);
+                            push_recent(&mut recent.write(), path.clone());
                             other_files_total.set(get_other_files_total(&p, &None));
                             *proj_sig.write() = Some(p);
-                            fs::settings::save_last_project_path(Some(&project_dir.to_string_lossy()));
+                            fs::settings::save_last_project_path(Some(&path));
                         }
                         Err(e) => {
+                            eprintln!("[chronicle] on_open_project: load FAILED: {}", e);
                             *notif.write() = Some(format!("開くエラー: {}", e));
                         }
                     }
                 } else {
-                    *notif.write() = Some("プロジェクトが見つかりませんでした".to_string());
+                    eprintln!("[chronicle] on_open_project: showing picker with {} projects", projects.len());
+                    p_list.set(projects);
+                    picker_visible.set(true);
+                }
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                eprintln!("[chronicle] on_open_project: start");
+                let dir = pick_folder("プロジェクトフォルダを選択");
+                if let Some(dir) = dir {
+                    eprintln!("[chronicle] on_open_project: dir={}", dir.display());
+                    if let Some(project_dir) = resolve_project_dir(&dir) {
+                        eprintln!("[chronicle] on_open_project: resolved_project={}", project_dir.display());
+                        match fs::project::load_project(&project_dir) {
+                            Ok(mut p) => {
+                                eprintln!("[chronicle] on_open_project: loaded OK, name={}", p.name);
+                                handle_daily_stats(&mut p);
+                                let pd = project_dir.to_string_lossy().to_string();
+                                push_recent(&mut recent.write(), pd);
+                                other_files_total.set(get_other_files_total(&p, &None));
+                                *proj_sig.write() = Some(p);
+                                fs::settings::save_last_project_path(Some(&project_dir.to_string_lossy()));
+                            }
+                            Err(e) => {
+                                eprintln!("[chronicle] on_open_project: load FAILED: {}", e);
+                                *notif.write() = Some(format!("開くエラー: {}", e));
+                            }
+                        }
+                    } else {
+                        eprintln!("[chronicle] on_open_project: resolve_project_dir returned None");
+                        *notif.write() = Some("プロジェクトが見つかりませんでした".to_string());
+                    }
+                } else {
+                    eprintln!("[chronicle] on_open_project: pick_folder returned None");
                 }
             }
         });
+    };
+
+    let on_select_project = {
+        let mut proj_sig = project.clone();
+        let mut notif = save_notification.clone();
+        let mut recent = recent_projects.clone();
+        let mut other_files_total = other_files_total.clone();
+        let mut picker_visible = project_picker_visible.clone();
+        move |(_name, path): (String, String)| {
+            picker_visible.set(false);
+            spawn(async move {
+                eprintln!("[chronicle] on_select_project: loading {}", path);
+                match fs::project::load_project(std::path::Path::new(&path)) {
+                    Ok(mut p) => {
+                        eprintln!("[chronicle] on_select_project: loaded OK, name={}", p.name);
+                        handle_daily_stats(&mut p);
+                        push_recent(&mut recent.write(), path.clone());
+                        other_files_total.set(get_other_files_total(&p, &None));
+                        *proj_sig.write() = Some(p);
+                        fs::settings::save_last_project_path(Some(&path));
+                    }
+                    Err(e) => {
+                        eprintln!("[chronicle] on_select_project: load FAILED: {}", e);
+                        *notif.write() = Some(format!("開くエラー: {}", e));
+                    }
+                }
+            });
+        }
     };
 
     let on_save = move |_| {
@@ -1532,28 +1657,56 @@ pub fn App() -> Element {
                                         p { "小説執筆支援アプリケーション" }
                                         div { class: "welcome-actions",
                                             button { class: "welcome-btn", onclick: move |_| dialog_visible.set(true), "新規プロジェクト" }
-                                            button { class: "welcome-btn", onclick: move |_| {
+                                            button { class: "welcome-btn", onclick: {
+                                                let mut picker_visible = project_picker_visible.clone();
+                                                let mut p_list = project_list.clone();
                                                 let mut proj_sig = project.clone();
                                                 let mut notif = save_notification.clone();
                                                 let mut recent = recent_projects.clone();
-                                                spawn(async move {
-                                                    let dir = pick_folder("プロジェクトフォルダを選択");
-                                                    if let Some(dir) = dir {
-                                                        if let Some(project_dir) = resolve_project_dir(&dir) {
-                                                            match crate::fs::project::load_project(&project_dir) {
-                                                                Ok(p) => {
-                                                                    let pd = project_dir.to_string_lossy().to_string();
-                                                                    push_recent(&mut recent.write(), pd);
-                                                                    *proj_sig.write() = Some(p);
-                                                                    fs::settings::save_last_project_path(Some(&project_dir.to_string_lossy()));
+                                                move |_| {
+                                                    #[cfg(target_os = "android")]
+                                                    {
+                                                        let projects = scan_android_projects();
+                                                        if projects.is_empty() {
+                                                            *notif.write() = Some("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());
+                                                        } else if projects.len() == 1 {
+                                                            let (_name, path) = projects.into_iter().next().unwrap();
+                                                            spawn(async move {
+                                                                match crate::fs::project::load_project(std::path::Path::new(&path)) {
+                                                                    Ok(p) => {
+                                                                        let pd = path.clone();
+                                                                        push_recent(&mut recent.write(), pd);
+                                                                        *proj_sig.write() = Some(p);
+                                                                        fs::settings::save_last_project_path(Some(&path));
+                                                                    }
+                                                                    Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
                                                                 }
-                                                                Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
-                                                            }
+                                                            });
                                                         } else {
-                                                            *notif.write() = Some("プロジェクトが見つかりませんでした".to_string());
+                                                            p_list.set(projects);
+                                                            picker_visible.set(true);
                                                         }
                                                     }
-                                                });
+                                                    #[cfg(not(target_os = "android"))]
+                                                    {
+                                                        let mut proj_sig = proj_sig.clone();
+                                                        let mut notif = notif.clone();
+                                                        let mut recent = recent.clone();
+                                                        spawn(async move {
+                                                            let dir = pick_folder("プロジェクトフォルダを選択");
+                                                            if let Some(dir) = dir {
+                                                                match crate::fs::project::load_project(&dir) {
+                                                                    Ok(p) => {
+                                                                        push_recent(&mut recent.write(), dir.to_string_lossy().to_string());
+                                                                        *proj_sig.write() = Some(p);
+                                                                        fs::settings::save_last_project_path(Some(&dir.to_string_lossy()));
+                                                                    }
+                                                                    Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+                                                }
                                             }, "プロジェクトを開く" }
                                         }
                                     }
@@ -1653,6 +1806,12 @@ pub fn App() -> Element {
                 visible: dialog_visible,
                 title: "新規プロジェクト".to_string(),
                 on_confirm: on_confirm_new,
+            }
+            ProjectPickerDialog {
+                visible: project_picker_visible,
+                projects: project_list,
+                on_select: on_select_project,
+                on_cancel: move |_| {},
             }
             RenameDialog {
                 visible: rename_dialog_visible,

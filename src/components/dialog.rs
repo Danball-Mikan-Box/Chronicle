@@ -338,6 +338,54 @@ pub fn RenameDialog(
 }
 
 #[component]
+pub fn ProjectPickerDialog(
+    visible: Signal<bool>,
+    projects: Signal<Vec<(String, String)>>,
+    on_select: EventHandler<(String, String)>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    if !*visible.read() {
+        return Ok(VNode::placeholder());
+    }
+
+    let close = move |_| { on_cancel.call(()); visible.set(false); };
+    let on_keydown = move |e: Event<KeyboardData>| {
+        if e.key() == Key::Escape { close(()); }
+    };
+
+    rsx! {
+        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+            div { class: "dialog", onclick: |e| e.stop_propagation(),
+                h2 { "プロジェクトを開く" }
+                div { class: "dialog-body",
+                    if projects.read().is_empty() {
+                        p { "プロジェクトが見つかりません" }
+                    } else {
+                        div { class: "project-picker-list",
+                            for (name, path) in projects.read().iter() {
+                                let p = path.clone();
+                                let n = name.clone();
+                                div {
+                                    class: "project-picker-item",
+                                    onclick: move |_| {
+                                        on_select.call((n.clone(), p.clone()));
+                                        visible.set(false);
+                                    },
+                                    div { class: "project-picker-name", "{name}" }
+                                }
+                            }
+                        }
+                    }
+                }
+                div { class: "dialog-actions",
+                    button { class: "dialog-btn", onclick: close, "キャンセル" }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 pub fn SettingsDialog(
     visible: Signal<bool>,
     project_name: Signal<String>,
