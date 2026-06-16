@@ -583,7 +583,7 @@ jobs:
           GIT_TAG: ${{ github.ref_name }}
 
       - name: Install dioxus-cli
-        run: cargo install cargo-binstall && cargo binstall dioxus-cli@0.6.3 -y
+        run: cargo install dioxus-cli --version 0.6.3
 
       - name: Decode keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > chronicle.keystore
