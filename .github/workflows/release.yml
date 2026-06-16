@@ -173,128 +173,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-            sudo apt-get install -y \
-              libgtk-3-dev \
-              libwebkit2gtk-4.1-dev \
-              libjavascriptcoregtk-4.1-dev \
-              libcairo2-dev \
-              libpango1.0-dev \
-              libgdk-pixbuf-2.0-dev \
-              libglib2.0-dev \
-              librsvg2-dev \
-              libxdo-dev \
-              file \
-              imagemagick
-
-      - name: Build release
-        run: cargo build --release
-        env:
-          GIT_TAG: ${{ github.ref_name }}
-
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Build .deb
-        run: cargo deb
-
-      - name: Build portable tarball
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          mkdir -p chronicle-$VERSION-x86_64-linux
-          cp target/release/chronicle chronicle-$VERSION-x86_64-linux/
-          cp Chronicle.png chronicle-$VERSION-x86_64-linux/
-          cp Chronicle.svg chronicle-$VERSION-x86_64-linux/
-          tar czf chronicle-$VERSION-x86_64-linux.tar.gz chronicle-$VERSION-x86_64-linux/
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-artifacts
-          path: |
-            target/debian/*.deb
-            chronicle-*.tar.gz
-          if-no-files-found: error
-
-  release-linux-rpm:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          deny-warnings: false
-
-      - name: Derive version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set version in Cargo.toml
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libgdk-pixbuf-2.0-dev \
-            libglib2.0-dev \
-            libxdo-dev \
-            rpm \
-            file
-
-      - name: Build release
-        run: cargo build --release
-        env:
-          GIT_TAG: ${{ github.ref_name }}
-
-      - name: Install cargo-generate-rpm
-        run: cargo install cargo-generate-rpm
-
-      - name: Build .rpm
-        run: cargo generate-rpm
-
-      - name: Upload RPM artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: rpm-artifacts
-          path: target/generate-rpm/*.rpm
-          if-no-files-found: error
-
-
-  release-linux-appimage:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          deny-warnings: false
-
-      - name: Derive version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+           sudo apt-get install -y \
             libgtk-3-dev \
             libwebkit2gtk-4.1-dev \
             libjavascriptcoregtk-4.1-dev \
@@ -304,7 +183,8 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             libxdo-dev \
-            file
+            file \
+            imagemagick
 
       - name: Build release
         run: cargo build --release
@@ -321,6 +201,8 @@ jobs:
           cp target/release/chronicle AppDir/usr/bin/
           cp Chronicle.png AppDir/usr/share/icons/hicolor/64x64/apps/chronicle.png
           cp Chronicle.svg AppDir/usr/share/icons/hicolor/scalable/apps/chronicle.svg
+          cp Chronicle.png AppDir/chronicle.png
+          cp Chronicle.svg AppDir/chronicle.svg
           cat > AppDir/usr/share/applications/chronicle.desktop <<'DESKTOP'
           [Desktop Entry]
           Name=Chronicle
@@ -564,7 +446,8 @@ jobs:
             libglib2.0-dev \
             librsvg2-dev \
             libxdo-dev \
-            file
+            file \
+            imagemagick
 
       - name: Install Java
         uses: actions/setup-java@v4
