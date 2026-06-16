@@ -678,3 +678,14 @@ jobs:
           name: android-artifact
           path: target/dx/Chronicle-release.apk
           if-no-files-found: error
+
+      - name: Create GitHub Release and upload APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Chronicle ${{ github.ref_name }}" \
+            --notes "Chronicle ${{ github.ref_name }} を公開します。" \
+            target/dx/Chronicle-release.apk || \
+          gh release upload "${{ github.ref_name }}" \
+            target/dx/Chronicle-release.apk --clobber
