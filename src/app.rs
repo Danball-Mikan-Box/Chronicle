@@ -45,9 +45,9 @@ fn android_storage_dir() -> std::path::PathBuf {
 
 #[cfg(target_os = "android")]
 fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
-    let dir = android_storage_dir().join("exports");
-    let _ = std::fs::create_dir_all(&dir);
-    Some(dir.join(default_name))
+    let export_dir = fs::android_export_dir();
+    let _ = std::fs::create_dir_all(&export_dir);
+    Some(export_dir.join(default_name))
 }
 
 #[cfg(not(target_os = "android"))]
@@ -719,7 +719,10 @@ pub fn App() -> Element {
 
                 match res {
                     Ok(_) => {
-                        *save_notification.write() = Some(format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
+                        let msg = format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or(""));
+                        #[cfg(target_os = "android")]
+                        let msg = format!("出力しました: {}", path.display());
+                        *save_notification.write() = Some(msg);
                     }
                     Err(e) => {
                         *save_notification.write() = Some(format!("エクスポートエラー: {}", e));

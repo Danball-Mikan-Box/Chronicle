@@ -46,3 +46,48 @@ fn get_android_files_dir() -> Option<std::path::PathBuf> {
     eprintln!("[chronicle] get_android_files_dir: success={}", path_str);
     Some(std::path::PathBuf::from(path_str))
 }
+
+/// Returns the exports directory on Android – uses external (user-accessible)
+/// storage via `context.getExternalFilesDir(null)`, falling back to internal.
+#[cfg(target_os = "android")]
+pub fn android_export_dir() -> std::path::PathBuf {
+    if let Some(path) = get_android_external_files_dir() {
+        let d = path.join("exports");
+        eprintln!("[chronicle] android_export_dir: external={}", d.display());
+        let _ = std::fs::create_dir_all(&d);
+        return d;
+    }
+    eprintln!("[chronicle] android_export_dir: external failed, using internal fallback");
+    let d = android_storage_dir().join("exports");
+    let _ = std::fs::create_dir_all(&d);
+    d
+}
+
+#[cfg(target_os = "android")]
+fn get_android_external_files_dir() -> Option<std::path::PathBuf> {
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    let context = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
+
+    let null_obj = jni::objects::JObject::null();
+    let files_dir = env
+        .call_method(
+            &context,
+            "getExternalFilesDir",
+            "(Ljava/lang/String;)Ljava/io/File;",
+            &[jni::JValue::Object(&null_obj)],
+        )
+        .ok()?
+        .l()
+        .ok()?;
+    let path_obj = env
+        .call_method(&files_dir, "getAbsolutePath", "()Ljava/lang/String;", &[])
+        .ok()?
+        .l()
+        .ok()?;
+    let path_jstr = jni::objects::JString::from(path_obj);
+    let path_str: String = env.get_string(&path_jstr).ok()?.into();
+    eprintln!("[chronicle] get_android_external_files_dir: success={}", path_str);
+    Some(std::path::PathBuf::from(path_str))
+}
