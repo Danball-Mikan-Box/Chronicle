@@ -526,7 +526,6 @@ jobs:
             target/wix/*.msi
             chronicle-*.zip
           if-no-files-found: error
-        fail_on_unmatched_files: false
 
   release-android:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
