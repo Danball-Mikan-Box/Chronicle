@@ -679,13 +679,34 @@ jobs:
           path: target/dx/Chronicle-release.apk
           if-no-files-found: error
 
-      - name: Create GitHub Release and upload APK
+  release-publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs:
+      - release-linux
+      - release-linux-rpm
+      - release-linux-appimage
+      - release-macos-x86_64
+      - release-macos-aarch64
+      - release-macos-universal
+      - release-windows
+      - release-android
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ github.ref_name }}" \
             --title "Chronicle ${{ github.ref_name }}" \
-            --notes "Chronicle ${{ github.ref_name }} を公開します。" \
-            target/dx/Chronicle-release.apk || \
-          gh release upload "${{ github.ref_name }}" \
-            target/dx/Chronicle-release.apk --clobber
+            --generate-notes \
+            2>/dev/null || true
+          find artifacts -type f | while read asset; do
+            echo "Uploading: $asset"
+            gh release upload "${{ github.ref_name }}" "$asset" --clobber
+          done
+
+
