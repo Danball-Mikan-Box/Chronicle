@@ -598,31 +598,43 @@ jobs:
 
       - name: Inject Custom App Icons
         run: |
-          convert Chronicle.png -resize 48x48 icon-48.png
-          convert Chronicle.png -resize 72x72 icon-72.png
-          convert Chronicle.png -resize 96x96 icon-96.png
-          convert Chronicle.png -resize 144x144 icon-144.png
-          convert Chronicle.png -resize 192x192 icon-192.png
+          pip install Pillow --quiet --break-system-packages
+          python3 << 'PYEOF'
+import os, sys, shutil
+from PIL import Image
 
-          RES_DIR=$(find target/dx -name "res" -type d | grep "main" | head -1)
-          if [ -z "$RES_DIR" ]; then
-            echo "Error: target res directory not found!"
-            exit 1
-          fi
-          echo "Found res directory at: $RES_DIR"
+img = Image.open("Chronicle.png")
 
-          cp icon-48.png "$RES_DIR/mipmap-mdpi/ic_launcher.png"
-          cp icon-48.png "$RES_DIR/mipmap-mdpi/ic_launcher_round.png"
-          cp icon-72.png "$RES_DIR/mipmap-hdpi/ic_launcher.png"
-          cp icon-72.png "$RES_DIR/mipmap-hdpi/ic_launcher_round.png"
-          cp icon-96.png "$RES_DIR/mipmap-xhdpi/ic_launcher.png"
-          cp icon-96.png "$RES_DIR/mipmap-xhdpi/ic_launcher_round.png"
-          cp icon-144.png "$RES_DIR/mipmap-xxhdpi/ic_launcher.png"
-          cp icon-144.png "$RES_DIR/mipmap-xxhdpi/ic_launcher_round.png"
-          cp icon-192.png "$RES_DIR/mipmap-xxxhdpi/ic_launcher.png"
-          cp icon-192.png "$RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png"
+for size, label in [(48, 48), (72, 72), (96, 96), (144, 144), (192, 192)]:
+    img.resize((size, size), Image.LANCZOS).save(f"icon-{label}.png")
+    print(f"icon-{label}.png created")
 
-          rm -rf "$RES_DIR/mipmap-anydpi-v26"
+import subprocess
+r = subprocess.run(["find", "target/dx", "-name", "res", "-type", "d"],
+                   capture_output=True, text=True)
+lines = [l for l in r.stdout.strip().split("\n") if l and "main" in l]
+if not lines:
+    print("Error: target res directory not found!")
+    sys.exit(1)
+
+res_dir = lines[0]
+print(f"Found res directory at: {res_dir}")
+
+mipmaps = {
+    48: "mdpi", 72: "hdpi", 96: "xhdpi",
+    144: "xxhdpi", 192: "xxxhdpi",
+}
+for size, density in mipmaps.items():
+    dst = os.path.join(res_dir, f"mipmap-{density}")
+    os.makedirs(dst, exist_ok=True)
+    for name in ["ic_launcher.png", "ic_launcher_round.png"]:
+        shutil.copy(f"icon-{size}.png", os.path.join(dst, name))
+
+v26 = os.path.join(res_dir, "mipmap-anydpi-v26")
+if os.path.isdir(v26):
+    shutil.rmtree(v26)
+    print(f"Removed {v26}")
+PYEOF
 
           GRADLEW=$(find target/dx -name "gradlew" -type f | head -1)
           if [ -z "$GRADLEW" ]; then
