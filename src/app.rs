@@ -1767,7 +1767,7 @@ pub fn App() -> Element {
                                                         let projects = scan_android_projects();
                                                         if projects.is_empty() {
                                                             let mut notif = notif.clone();
-                                                            notif.set("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());
+                                                            notif.set(Some("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string()));
                                                         } else if projects.len() == 1 {
                                                             let (_name, path) = projects.into_iter().next().unwrap();
                                                             let mut notif = notif.clone();
@@ -1781,7 +1781,7 @@ pub fn App() -> Element {
                                                                         *proj_sig.write() = Some(p);
                                                                         fs::settings::save_last_project_path(Some(&path));
                                                                     }
-                                                                    Err(e) => { notif.set(format!("開くエラー: {}", e)); }
+                                                                    Err(e) => { notif.set(Some(format!("開くエラー: {}", e))); }
                                                                 }
                                                             });
                                                         } else {
