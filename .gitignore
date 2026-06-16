@@ -4,6 +4,7 @@
 *~
 .DS_Store
 Thumbs.db
+node_modules/
 
 
 # Added by cargo

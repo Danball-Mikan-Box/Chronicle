@@ -566,7 +566,7 @@ jobs:
             librsvg2-dev \
             libxdo-dev \
             file \
-            imagemagick
+            python3-pil
 
       - name: Install Java
         uses: actions/setup-java@v4
@@ -598,7 +598,6 @@ jobs:
 
       - name: Inject Custom App Icons
         run: |
-          pip install Pillow --quiet --break-system-packages
           python3 -c '
           import os, sys, shutil
           from PIL import Image
