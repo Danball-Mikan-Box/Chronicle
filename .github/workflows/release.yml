@@ -603,7 +603,7 @@ jobs:
           from PIL import Image
           img = Image.open("Chronicle.png")
           for size, label in [(48, 48), (72, 72), (96, 96), (144, 144), (192, 192)]:
-              img.resize((size, size), Image.LANCZOS).save(f"icon-{label}.png")
+              img.resize((size, size), Image.Resampling.LANCZOS).save(f"icon-{label}.png")
               print(f"icon-{label}.png created")
           import subprocess
           r = subprocess.run(["find", "target/dx", "-name", "res", "-type", "d"],
