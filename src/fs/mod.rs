@@ -68,54 +68,94 @@ pub fn android_export_dir() -> std::path::PathBuf {
 #[cfg(target_os = "android")]
 pub fn android_downloads_export_dir() -> std::path::PathBuf {
     let ctx = ndk_context::android_context();
-    if let Ok(vm) = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) } {
-        if let Ok(mut env) = vm.attach_current_thread() {
-            if let Ok(env_class) = env.find_class("android/os/Environment") {
-                if let Ok(downloads_field) = env.get_static_field(
-                    &env_class,
-                    "DIRECTORY_DOWNLOADS",
-                    "Ljava/lang/String;",
-                ) {
-                    if let Ok(downloads_jobj) = downloads_field.l() {
-                        let downloads_jstr: jni::objects::JString = downloads_jobj.into();
-                        if let Ok(dir_name) = env.get_string(&downloads_jstr) {
-                            let dir_name: String = dir_name.into();
-                            if let Ok(downloads_file) = env.call_static_method(
-                                &env_class,
-                                "getExternalStoragePublicDirectory",
-                                "(Ljava/lang/String;)Ljava/io/File;",
-                                &[jni::objects::JValue::Object(&downloads_jobj)],
-                            ) {
-                                if let Ok(file_obj) = downloads_file.l() {
-                                    if let Ok(path_obj) = env.call_method(
-                                        &file_obj,
-                                        "getAbsolutePath",
-                                        "()Ljava/lang/String;",
-                                        &[],
-                                    ) {
-                                        if let Ok(path_jobj) = path_obj.l() {
-                                            let path_jstr: jni::objects::JString = path_jobj.into();
-                                            if let Ok(path_str) = env.get_string(&path_jstr) {
-                                                let path_str: String = path_str.into();
-                                                let chronicle_dir = std::path::PathBuf::from(&path_str).join("Chronicle");
-                                                if std::fs::create_dir_all(&chronicle_dir).is_ok() {
-                                                    eprintln!("[chronicle] android_downloads_export_dir: {}", chronicle_dir.display());
-                                                    return chronicle_dir;
-                                                }
-                                                eprintln!("[chronicle] android_downloads_export_dir: cannot create dir, falling back");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) };
+    let mut env = match vm.and_then(|vm| vm.attach_current_thread()) {
+        Ok(env) => env,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: JNI attach failed, using android_export_dir fallback");
+            return android_export_dir();
         }
+    };
+    let env_class = match env.find_class("android/os/Environment") {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: find_class failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let downloads_field = match env.get_static_field(
+        &env_class,
+        "DIRECTORY_DOWNLOADS",
+        "Ljava/lang/String;",
+    ) {
+        Ok(f) => f,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: get_static_field failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let downloads_jobj = match downloads_field.l() {
+        Ok(obj) => obj,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: downloads_field.l() failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let downloads_file = match env.call_static_method(
+        &env_class,
+        "getExternalStoragePublicDirectory",
+        "(Ljava/lang/String;)Ljava/io/File;",
+        &[jni::objects::JValue::Object(&downloads_jobj)],
+    ) {
+        Ok(r) => r,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: getExternalStoragePublicDirectory failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let file_obj = match downloads_file.l() {
+        Ok(obj) => obj,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: downloads_file.l() failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let path_obj = match env.call_method(
+        &file_obj,
+        "getAbsolutePath",
+        "()Ljava/lang/String;",
+        &[],
+    ) {
+        Ok(r) => r,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: getAbsolutePath failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let path_jobj = match path_obj.l() {
+        Ok(obj) => obj,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: path_obj.l() failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let path_jstr: jni::objects::JString = path_jobj.into();
+    let path_str = match env.get_string(&path_jstr) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: get_string failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let path_str: String = path_str.into();
+    let chronicle_dir = std::path::PathBuf::from(&path_str).join("Chronicle");
+    if std::fs::create_dir_all(&chronicle_dir).is_ok() {
+        eprintln!("[chronicle] android_downloads_export_dir: {}", chronicle_dir.display());
+        chronicle_dir
+    } else {
+        eprintln!("[chronicle] android_downloads_export_dir: cannot create dir, using android_export_dir fallback");
+        android_export_dir()
     }
-    eprintln!("[chronicle] android_downloads_export_dir: JNI failed, using android_export_dir fallback");
-    android_export_dir()
 }
 
 #[cfg(target_os = "android")]
