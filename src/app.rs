@@ -729,7 +729,7 @@ pub fn App() -> Element {
                                     b64 = b64,
                                     filename = filename,
                                 );
-                                eval(js);
+                                eval(&js);
                             }
                         }
                         let msg = format!("出力しました: {}", if cfg!(target_os = "android") { path.display().to_string() } else { path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string() });
