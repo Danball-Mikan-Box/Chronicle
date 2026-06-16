@@ -76,7 +76,7 @@ fn get_android_external_files_dir() -> Option<std::path::PathBuf> {
             &context,
             "getExternalFilesDir",
             "(Ljava/lang/String;)Ljava/io/File;",
-            &[jni::JValue::Object(&null_obj)],
+            &[jni::objects::JValue::Object(&null_obj)],
         )
         .ok()?
         .l()

@@ -897,7 +897,7 @@ pub fn App() -> Element {
             spawn(async move {
                 match tokio::time::timeout(
                     std::time::Duration::from_secs(120),
-                    handler.recv(),
+                    handler.recv::<String>(),
                 ).await {
                     Ok(Ok(val)) => {
                         if let Some(base64_str) = val.as_str() {
