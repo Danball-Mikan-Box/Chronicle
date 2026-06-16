@@ -239,7 +239,7 @@ pub fn App() -> Element {
 
     let writing_mode = use_signal(|| WritingMode::Horizontal);
     let mut dialog_visible = use_signal(|| false);
-    let mut project_picker_visible = use_signal(|| false);
+    let project_picker_visible = use_signal(|| false);
     let project_list: Signal<Vec<(String, String)>> = use_signal(Vec::new);
     let rename_dialog_visible = use_signal(|| false);
     let mut export_dialog_visible = use_signal(|| false);
@@ -774,11 +774,11 @@ pub fn App() -> Element {
         let mut notif = save_notification.clone();
         let mut recent = recent_projects.clone();
         let mut other_files_total = other_files_total.clone();
-        let mut picker_visible = project_picker_visible.clone();
-        let mut p_list = project_list.clone();
         spawn(async move {
             #[cfg(target_os = "android")]
             {
+                let mut picker_visible = project_picker_visible.clone();
+                let mut p_list = project_list.clone();
                 let projects = scan_android_projects();
                 if projects.is_empty() {
                     eprintln!("[chronicle] on_open_project: no projects found");
@@ -868,9 +868,9 @@ pub fn App() -> Element {
     };
 
     let on_import_project = move |_| {
-        let mut proj_sig = project.clone();
-        let mut notif = save_notification.clone();
-        let mut recent = recent_projects.clone();
+        let proj_sig = project.clone();
+        let notif = save_notification.clone();
+        let recent = recent_projects.clone();
         #[cfg(target_os = "android")]
         {
             let js = r#"
@@ -1760,14 +1760,14 @@ pub fn App() -> Element {
                                         div { class: "welcome-actions",
                                             button { class: "welcome-btn", onclick: move |_| dialog_visible.set(true), "新規プロジェクト" }
                                             button { class: "welcome-btn", onclick: {
-                                                let mut picker_visible = project_picker_visible.clone();
-                                                let mut p_list = project_list.clone();
-                                                let mut proj_sig = project.clone();
-                                                let mut notif = save_notification.clone();
-                                                let mut recent = recent_projects.clone();
+                                                let proj_sig = project.clone();
+                                                let notif = save_notification.clone();
+                                                let recent = recent_projects.clone();
                                                 move |_| {
                                                     #[cfg(target_os = "android")]
                                                     {
+                                                        let mut picker_visible = project_picker_visible.clone();
+                                                        let mut p_list = project_list.clone();
                                                         let projects = scan_android_projects();
                                                         if projects.is_empty() {
                                                             *notif.write() = Some("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());

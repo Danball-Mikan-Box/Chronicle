@@ -348,13 +348,15 @@ pub fn ProjectPickerDialog(
         return Ok(VNode::placeholder());
     }
 
-    let close = move |_| { on_cancel.call(()); visible.set(false); };
+    let on_cancel_esc = on_cancel.clone();
     let on_keydown = move |e: Event<KeyboardData>| {
-        if e.key() == Key::Escape { close(()); }
+        if e.key() == Key::Escape { on_cancel_esc.call(()); visible.set(false); }
     };
 
+    let items: Vec<_> = projects.read().iter().map(|(n, p)| (n.clone(), p.clone())).collect();
+
     rsx! {
-        div { class: "dialog-overlay", onclick: close, onkeydown: on_keydown,
+        div { class: "dialog-overlay", onclick: move |_: Event<MouseData>| { on_cancel.call(()); visible.set(false); }, onkeydown: on_keydown,
             div { class: "dialog", onclick: |e| e.stop_propagation(),
                 h2 { "プロジェクトを開く" }
                 div { class: "dialog-body",
@@ -362,13 +364,11 @@ pub fn ProjectPickerDialog(
                         p { "プロジェクトが見つかりません" }
                     } else {
                         div { class: "project-picker-list",
-                            for (name, path) in projects.read().iter() {
-                                let p = path.clone();
-                                let n = name.clone();
+                            for (name, path) in items {
                                 div {
                                     class: "project-picker-item",
                                     onclick: move |_| {
-                                        on_select.call((n.clone(), p.clone()));
+                                        on_select.call((name.clone(), path.clone()));
                                         visible.set(false);
                                     },
                                     div { class: "project-picker-name", "{name}" }
@@ -378,7 +378,7 @@ pub fn ProjectPickerDialog(
                     }
                 }
                 div { class: "dialog-actions",
-                    button { class: "dialog-btn", onclick: close, "キャンセル" }
+                    button { class: "dialog-btn", onclick: move |_: Event<MouseData>| { on_cancel.call(()); visible.set(false); }, "キャンセル" }
                 }
             }
         }
