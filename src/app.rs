@@ -900,27 +900,25 @@ pub fn App() -> Element {
                     handler.recv::<String>(),
                 ).await {
                     Ok(Ok(val)) => {
-                        if let Some(base64_str) = val.as_str() {
-                            eprintln!("[chronicle] on_import: got {} bytes (base64)", base64_str.len());
-                            use base64::Engine;
-                            let bytes = base64::engine::general_purpose::STANDARD
-                                .decode(base64_str)
-                                .unwrap_or_default();
-                            eprintln!("[chronicle] on_import: decoded {} bytes", bytes.len());
-                            let projects_dir = android_storage_dir().join("projects");
-                            match fs::project::import_project_from_zip(&bytes, &projects_dir) {
-                                Ok(p) => {
-                                    eprintln!("[chronicle] on_import: success, name={}", p.name);
-                                    let path = p.root_dir.to_string_lossy().to_string();
-                                    push_recent(&mut recent.write(), path.clone());
-                                    *proj_sig.write() = Some(p);
-                                    fs::settings::save_last_project_path(Some(&path));
-                                    *notif.write() = Some("インポートしました".to_string());
-                                }
-                                Err(e) => {
-                                    eprintln!("[chronicle] on_import: FAILED: {}", e);
-                                    *notif.write() = Some(format!("インポートエラー: {}", e));
-                                }
+                        eprintln!("[chronicle] on_import: got {} bytes (base64)", val.len());
+                        use base64::Engine;
+                        let bytes = base64::engine::general_purpose::STANDARD
+                            .decode(&val)
+                            .unwrap_or_default();
+                        eprintln!("[chronicle] on_import: decoded {} bytes", bytes.len());
+                        let projects_dir = android_storage_dir().join("projects");
+                        match fs::project::import_project_from_zip(&bytes, &projects_dir) {
+                            Ok(p) => {
+                                eprintln!("[chronicle] on_import: success, name={}", p.name);
+                                let path = p.root_dir.to_string_lossy().to_string();
+                                push_recent(&mut recent.write(), path.clone());
+                                *proj_sig.write() = Some(p);
+                                fs::settings::save_last_project_path(Some(&path));
+                                *notif.write() = Some("インポートしました".to_string());
+                            }
+                            Err(e) => {
+                                eprintln!("[chronicle] on_import: FAILED: {}", e);
+                                *notif.write() = Some(format!("インポートエラー: {}", e));
                             }
                         }
                     }
