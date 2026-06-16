@@ -68,11 +68,17 @@ pub fn android_export_dir() -> std::path::PathBuf {
 #[cfg(target_os = "android")]
 pub fn android_downloads_export_dir() -> std::path::PathBuf {
     let ctx = ndk_context::android_context();
-    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) };
-    let mut env = match vm.and_then(|vm| vm.attach_current_thread()) {
+    let vm = match unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) } {
+        Ok(vm) => vm,
+        Err(_) => {
+            eprintln!("[chronicle] android_downloads_export_dir: JavaVM::from_raw failed, using android_export_dir fallback");
+            return android_export_dir();
+        }
+    };
+    let mut env = match vm.attach_current_thread() {
         Ok(env) => env,
         Err(_) => {
-            eprintln!("[chronicle] android_downloads_export_dir: JNI attach failed, using android_export_dir fallback");
+            eprintln!("[chronicle] android_downloads_export_dir: attach_current_thread failed, using android_export_dir fallback");
             return android_export_dir();
         }
     };
