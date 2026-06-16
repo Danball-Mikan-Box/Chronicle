@@ -100,22 +100,6 @@ fn scan_android_projects() -> Vec<(String, String)> {
         .collect()
 }
 
-/// On Android, scan `dir` for valid project subdirectories and return the most recent.
-#[cfg(target_os = "android")]
-fn resolve_project_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    if dir.join("chronicle.json").exists() {
-        return Some(dir.to_path_buf());
-    }
-    let entries = std::fs::read_dir(dir).ok()?;
-    let mut projects: Vec<std::path::PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir() && e.path().join("chronicle.json").exists())
-        .map(|e| e.path())
-        .collect();
-    projects.sort_by_key(|p| std::fs::metadata(p).ok().and_then(|m| m.modified().ok()));
-    projects.into_iter().last()
-}
-
 #[cfg(not(target_os = "android"))]
 fn resolve_project_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     Some(dir.to_path_buf())
