@@ -719,9 +719,7 @@ pub fn App() -> Element {
 
                 match res {
                     Ok(_) => {
-                        let msg = format!("出力しました: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or(""));
-                        #[cfg(target_os = "android")]
-                        let msg = format!("出力しました: {}", path.display());
+                        let msg = format!("出力しました: {}", if cfg!(target_os = "android") { path.display().to_string() } else { path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string() });
                         *save_notification.write() = Some(msg);
                     }
                     Err(e) => {
@@ -890,7 +888,7 @@ pub fn App() -> Element {
                 };
                 input.click();
             "#;
-            let handler = eval(js);
+            let mut handler = eval(js);
             let mut recent = recent.clone();
             let mut proj_sig = proj_sig.clone();
             let mut notif = notif.clone();
@@ -1768,9 +1766,13 @@ pub fn App() -> Element {
                                                         let mut p_list = project_list.clone();
                                                         let projects = scan_android_projects();
                                                         if projects.is_empty() {
-                                                            *notif.write() = Some("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());
+                                                            let mut notif = notif.clone();
+                                                            notif.set("プロジェクトが見つかりませんでした。先に新規プロジェクトを作成してください。".to_string());
                                                         } else if projects.len() == 1 {
                                                             let (_name, path) = projects.into_iter().next().unwrap();
+                                                            let mut notif = notif.clone();
+                                                            let mut proj_sig = proj_sig.clone();
+                                                            let mut recent = recent.clone();
                                                             spawn(async move {
                                                                 match crate::fs::project::load_project(std::path::Path::new(&path)) {
                                                                     Ok(p) => {
@@ -1779,7 +1781,7 @@ pub fn App() -> Element {
                                                                         *proj_sig.write() = Some(p);
                                                                         fs::settings::save_last_project_path(Some(&path));
                                                                     }
-                                                                    Err(e) => { *notif.write() = Some(format!("開くエラー: {}", e)); }
+                                                                    Err(e) => { notif.set(format!("開くエラー: {}", e)); }
                                                                 }
                                                             });
                                                         } else {
