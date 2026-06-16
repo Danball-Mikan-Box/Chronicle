@@ -12,6 +12,7 @@ pub fn Toolbar(
     project: Signal<Option<Project>>,
     on_new_project: EventHandler<()>,
     on_open_project: EventHandler<()>,
+    on_import_project: EventHandler<()>,
     on_close_project: EventHandler<()>,
     on_save: EventHandler<()>,
     on_export: EventHandler<()>,
@@ -79,6 +80,7 @@ pub fn Toolbar(
                 button { class: "toolbar-btn toolbar-overflow-btn", onclick: move |_| { let v = !*show_overflow.read(); show_overflow.set(v); }, "\u{22EE}" }
                 button { class: "toolbar-btn overflow-hidden", onclick: move |_| on_new_project.call(()), "新規" }
                 button { class: "toolbar-btn overflow-hidden", onclick: move |_| on_open_project.call(()), "開く" }
+                button { class: "toolbar-btn overflow-hidden", onclick: move |_| on_import_project.call(()), "取込" }
                 button { class: "toolbar-btn overflow-hidden", disabled: proj_name.is_empty(), onclick: move |_| on_close_project.call(()), "閉じる" }
                 span { class: "separator" }
                 button { class: if *writing_mode.read() == WritingMode::Vertical { "toolbar-btn overflow-hidden active" } else { "toolbar-btn overflow-hidden" }, disabled: proj_name.is_empty(), onclick: move |_| writing_mode.set(WritingMode::Vertical), "縦書" }
@@ -105,6 +107,7 @@ pub fn Toolbar(
                     div { class: "menu-dropdown-panel", onclick: |e| e.stop_propagation(),
                         button { class: "menu-dropdown-item", onclick: move |_| { on_new_project.call(()); show_overflow.set(false); }, "新規" }
                         button { class: "menu-dropdown-item", onclick: move |_| { on_open_project.call(()); show_overflow.set(false); }, "開く" }
+                        button { class: "menu-dropdown-item", onclick: move |_| { on_import_project.call(()); show_overflow.set(false); }, "取込" }
                         button { class: "menu-dropdown-item", disabled: proj_name.is_empty(), onclick: move |_| { on_close_project.call(()); show_overflow.set(false); }, "閉じる" }
                         button { class: "menu-dropdown-item", disabled: proj_name.is_empty(), onclick: move |_| { on_export.call(()); show_overflow.set(false); }, "出力" }
                         button { class: "menu-dropdown-item", onclick: move |_| { on_toggle_dark.call(()); show_overflow.set(false); }, if is_dark { "\u{2601} ライト" } else { "\u{2600} ダーク" } }

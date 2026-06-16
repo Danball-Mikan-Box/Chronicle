@@ -867,6 +867,104 @@ pub fn App() -> Element {
         }
     };
 
+    let on_import_project = move |_| {
+        let mut proj_sig = project.clone();
+        let mut notif = save_notification.clone();
+        let mut recent = recent_projects.clone();
+        #[cfg(target_os = "android")]
+        {
+            let js = r#"
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.zip';
+                input.onchange = async function() {
+                    var file = input.files[0];
+                    if (!file) return;
+                    var buffer = await file.arrayBuffer();
+                    var bytes = new Uint8Array(buffer);
+                    var binary = '';
+                    for (var i = 0; i < bytes.length; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    window.__dioxus__.send(btoa(binary));
+                };
+                input.click();
+            "#;
+            let handler = eval(js);
+            let mut recent = recent.clone();
+            let mut proj_sig = proj_sig.clone();
+            let mut notif = notif.clone();
+            spawn(async move {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(120),
+                    handler.recv(),
+                ).await {
+                    Ok(Ok(val)) => {
+                        if let Some(base64_str) = val.as_str() {
+                            eprintln!("[chronicle] on_import: got {} bytes (base64)", base64_str.len());
+                            use base64::Engine;
+                            let bytes = base64::engine::general_purpose::STANDARD
+                                .decode(base64_str)
+                                .unwrap_or_default();
+                            eprintln!("[chronicle] on_import: decoded {} bytes", bytes.len());
+                            let projects_dir = android_storage_dir().join("projects");
+                            match fs::project::import_project_from_zip(&bytes, &projects_dir) {
+                                Ok(p) => {
+                                    eprintln!("[chronicle] on_import: success, name={}", p.name);
+                                    let path = p.root_dir.to_string_lossy().to_string();
+                                    push_recent(&mut recent.write(), path.clone());
+                                    *proj_sig.write() = Some(p);
+                                    fs::settings::save_last_project_path(Some(&path));
+                                    *notif.write() = Some("インポートしました".to_string());
+                                }
+                                Err(e) => {
+                                    eprintln!("[chronicle] on_import: FAILED: {}", e);
+                                    *notif.write() = Some(format!("インポートエラー: {}", e));
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        *notif.write() = Some("インポートがキャンセルされました".to_string());
+                    }
+                }
+            });
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let mut recent = recent.clone();
+            let mut proj_sig = proj_sig.clone();
+            let mut notif = notif.clone();
+            spawn(async move {
+                let file = rfd::FileDialog::new()
+                    .add_filter("ZIP", &["zip"])
+                    .pick_file();
+                if let Some(ref path) = file {
+                    match std::fs::read(path) {
+                        Ok(bytes) => {
+                            let parent = path.parent().unwrap_or(std::path::Path::new("."));
+                            match fs::project::import_project_from_zip(&bytes, parent) {
+                                Ok(p) => {
+                                    let path = p.root_dir.to_string_lossy().to_string();
+                                    push_recent(&mut recent.write(), path.clone());
+                                    *proj_sig.write() = Some(p);
+                                    fs::settings::save_last_project_path(Some(&path));
+                                    *notif.write() = Some("インポートしました".to_string());
+                                }
+                                Err(e) => {
+                                    *notif.write() = Some(format!("インポートエラー: {}", e));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            *notif.write() = Some(format!("読み込みエラー: {}", e));
+                        }
+                    }
+                }
+            });
+        }
+    };
+
     let on_save = move |_| {
         do_save_current();
     };
@@ -1560,6 +1658,7 @@ pub fn App() -> Element {
                                         }
                                     });
                                 }, "プロジェクトを開く" }
+                                button { class: "welcome-btn", onclick: move |_| on_import_project(()), "ZIP取込" }
                             }
                             if !recent_list.is_empty() {
                                 div { class: "welcome-recent",
@@ -1711,6 +1810,7 @@ pub fn App() -> Element {
                                                     }
                                                 }
                                             }, "プロジェクトを開く" }
+                                            button { class: "welcome-btn", onclick: move |_| on_import_project(()), "ZIP取込" }
                                         }
                                     }
                                 }
@@ -1783,6 +1883,7 @@ pub fn App() -> Element {
                 project: project,
                 on_new_project: on_new_project,
                 on_open_project: on_open_project,
+                on_import_project: on_import_project,
                 on_close_project: on_close_project,
                 on_save: on_save,
                 on_export: on_export,

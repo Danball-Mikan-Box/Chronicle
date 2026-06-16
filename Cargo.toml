@@ -38,6 +38,7 @@ embed-resource = "2"
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 ndk-context = "0.1"
+base64 = "0.22"
 
 
 [package.metadata.deb]
