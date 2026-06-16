@@ -45,8 +45,7 @@ fn android_storage_dir() -> std::path::PathBuf {
 
 #[cfg(target_os = "android")]
 fn pick_save_path(default_name: &str) -> Option<std::path::PathBuf> {
-    let export_dir = fs::android_export_dir();
-    let _ = std::fs::create_dir_all(&export_dir);
+    let export_dir = fs::android_downloads_export_dir();
     Some(export_dir.join(default_name))
 }
 
@@ -703,35 +702,6 @@ pub fn App() -> Element {
 
                 match res {
                     Ok(_) => {
-                        #[cfg(target_os = "android")]
-                        {
-                            if let Ok(bytes) = std::fs::read(&path) {
-                                use base64::Engine;
-                                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("export.zip");
-                                let js = format!(
-                                    r#"(function() {{
-                                        var binary = atob('{b64}');
-                                        var array = new Uint8Array(binary.length);
-                                        for (var i = 0; i < binary.length; i++) {{
-                                            array[i] = binary.charCodeAt(i);
-                                        }}
-                                        var blob = new Blob([array], {{type: 'application/zip'}});
-                                        var url = URL.createObjectURL(blob);
-                                        var a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = '{filename}';
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        URL.revokeObjectURL(url);
-                                    }})()"#,
-                                    b64 = b64,
-                                    filename = filename,
-                                );
-                                eval(&js);
-                            }
-                        }
                         let msg = format!("出力しました: {}", if cfg!(target_os = "android") { path.display().to_string() } else { path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string() });
                         *save_notification.write() = Some(msg);
                     }
