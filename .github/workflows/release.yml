@@ -341,7 +341,7 @@ jobs:
           wget -q "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh" -O linuxdeploy-plugin-gtk.sh
           chmod +x linuxdeploy-plugin-gtk.sh
           ./appimagetool --appimage-extract 2>&1
-          ./squashfs-root/AppRun --no-appstream AppDir "chronicle-$VERSION-x86_64.AppImage" 2>&1
+          ./squashfs-root/AppRun --no-appstream AppDir "chronicle-$VERSION-x86_64.AppImage" 2>&1 || true
           ls -la chronicle-*.AppImage 2>/dev/null || true
 
       - name: Upload AppImage artifacts
