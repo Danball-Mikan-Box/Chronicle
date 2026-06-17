@@ -994,6 +994,16 @@ pub fn App() -> Element {
         }
     };
 
+    let on_delete_project = {
+        let mut pending_delete = pending_delete.clone();
+        let project = project.clone();
+        move |_| {
+            if let Some(ref p) = *project.read() {
+                pending_delete.set(Some(PendingDelete::Project(p.name.clone())));
+            }
+        }
+    };
+
     #[cfg(not(target_os = "android"))]
     let close_desktop: Rc<dyn Fn()> = {
         let d = desktop.clone();
@@ -1284,12 +1294,31 @@ pub fn App() -> Element {
         let mut chapter_version = chapter_version.clone();
         let mut pending_delete = pending_delete.clone();
         let mut other_files_total = other_files_total.clone();
+        let mut recent_projects = recent_projects.clone();
         move |()| {
             let action = pending_delete.read().clone();
             if let Some(action) = action {
                 let mut proj = project.write();
                 if let Some(ref mut p) = *proj {
                     match action {
+                        PendingDelete::Project(_name) => {
+                            let root_dir = p.root_dir.clone();
+                            let _ = fs::project::delete_project(&root_dir);
+                            drop(proj);
+                            project.set(None);
+                            open_tabs.set(Vec::new());
+                            active_tab.set(None);
+                            content_sig.set(String::new());
+                            is_saved.set(true);
+                            let mut recent = recent_projects.write();
+                            let dir_str = root_dir.to_string_lossy().to_string();
+                            recent.retain(|d| *d != dir_str);
+                            save_recent(&recent);
+                            fs::settings::save_last_project_path(None);
+                            chapter_version += 1;
+                            pending_delete.set(None);
+                            return;
+                        }
                         PendingDelete::Chapter(dir_name) => {
                             // Remove all tab entries for this chapter
                             let close_keys: Vec<DocRef> = tab_content.read().keys()
@@ -1924,14 +1953,15 @@ pub fn App() -> Element {
                 },
             }
             if *settings_visible.read() {
-                SettingsDialog {
-                    visible: settings_visible,
-                    project_name: project_name,
-                    project_settings: project_settings,
-                    global_settings: global_settings,
-                    project_is_open: project.read().is_some(),
-                    on_save: on_confirm_settings,
-                }
+            SettingsDialog {
+                visible: settings_visible,
+                project_name: project_name,
+                project_settings: project_settings,
+                global_settings: global_settings,
+                project_is_open: project.read().is_some(),
+                on_save: on_confirm_settings,
+                on_delete_project: on_delete_project,
+            }
             }
 
             ExportDialog {

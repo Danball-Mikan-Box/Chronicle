@@ -9,6 +9,7 @@ pub enum PendingDelete {
     Chapter(String),
     Tale(String, String),
     Material(String),
+    Project(String),
 }
 
 impl PendingDelete {
@@ -17,6 +18,7 @@ impl PendingDelete {
             PendingDelete::Chapter(name) => format!("章「{}」を削除しますか？\nこの操作は元に戻せません。", name),
             PendingDelete::Tale(ch, name) => format!("話「{}」({})を削除しますか？\nこの操作は元に戻せません。", name, ch),
             PendingDelete::Material(name) => format!("資料「{}」を削除しますか？\nこの操作は元に戻せません。", name),
+            PendingDelete::Project(name) => format!("プロジェクト「{}」を削除しますか？\nこの操作は元に戻せません。全てのファイルが完全に削除されます。", name),
         }
     }
 }
@@ -393,6 +395,7 @@ pub fn SettingsDialog(
     global_settings: Signal<crate::model::project::GlobalSettings>,
     project_is_open: bool,
     on_save: EventHandler<(String, ProjectSettings, crate::model::project::GlobalSettings)>,
+    on_delete_project: EventHandler<()>,
 ) -> Element {
     let settings = project_settings.read().clone();
     let g_settings = global_settings.read().clone();
@@ -585,6 +588,21 @@ pub fn SettingsDialog(
                                     }
                                     "自動保存"
                                 }
+                            }
+                        }
+                    }
+                    if project_is_open {
+                        hr { class: "dialog-separator" }
+                        div { class: "dialog-danger-section",
+                            h3 { class: "dialog-section-title", "危険な操作" }
+                            p { class: "dialog-danger-desc", "プロジェクトを完全に削除します。この操作は元に戻せません。" }
+                            button {
+                                class: "dialog-btn danger",
+                                onclick: move |_| {
+                                    visible.set(false);
+                                    on_delete_project.call(());
+                                },
+                                "プロジェクトを削除"
                             }
                         }
                     }

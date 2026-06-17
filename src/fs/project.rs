@@ -87,3 +87,10 @@ pub fn import_project_from_zip(zip_bytes: &[u8], projects_dir: &Path) -> Result<
     project.root_dir = root_dir;
     Ok(project)
 }
+
+pub fn delete_project(root_dir: &Path) -> Result<(), String> {
+    if root_dir.exists() {
+        fs::remove_dir_all(root_dir).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
