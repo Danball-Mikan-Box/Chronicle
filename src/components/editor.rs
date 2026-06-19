@@ -78,6 +78,8 @@ pub fn Editor(
     global_settings: Signal<crate::model::project::GlobalSettings>,
     is_saved: Signal<bool>,
     on_save: EventHandler<()>,
+    on_undo: EventHandler<()>,
+    on_redo: EventHandler<()>,
     focus_mode: Signal<bool>,
     placeholder: String,
 ) -> Element {
@@ -186,12 +188,25 @@ pub fn Editor(
                     let _ = eval("document.querySelector('.editor').blur();");
                     return;
                 }
-                Key::Character(c) if evt.modifiers().contains(Modifiers::CONTROL) => {
-                    match c.as_str() {
-                        "s" => { evt.prevent_default(); on_save.call(()); }
-                        "b" => { evt.prevent_default(); do_format(FormatKind::Bold); }
-                        "i" => { evt.prevent_default(); do_format(FormatKind::Italic); }
-                        _ => {}
+                Key::Character(c) => {
+                    let mods = evt.modifiers();
+                    if mods.contains(Modifiers::CONTROL) {
+                        evt.prevent_default();
+                        if mods.contains(Modifiers::SHIFT) {
+                            match c.as_str() {
+                                "z" => on_redo.call(()),
+                                _ => {}
+                            }
+                        } else {
+                            match c.as_str() {
+                                "s" => on_save.call(()),
+                                "z" => on_undo.call(()),
+                                "y" => on_redo.call(()),
+                                "b" => do_format(FormatKind::Bold),
+                                "i" => do_format(FormatKind::Italic),
+                                _ => {}
+                            }
+                        }
                     }
                 }
                 Key::Enter => {

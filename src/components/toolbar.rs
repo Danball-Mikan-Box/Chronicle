@@ -15,6 +15,10 @@ pub fn Toolbar(
     on_import_project: EventHandler<()>,
     on_close_project: EventHandler<()>,
     on_save: EventHandler<()>,
+    on_undo: EventHandler<()>,
+    on_redo: EventHandler<()>,
+    can_undo: bool,
+    can_redo: bool,
     on_export: EventHandler<()>,
     on_toggle_dark: EventHandler<()>,
     is_dark: bool,
@@ -75,6 +79,8 @@ pub fn Toolbar(
                 }
             }
             div { class: "toolbar-center",
+                button { class: "toolbar-btn keep-visible", disabled: !can_undo, onclick: move |_| on_undo.call(()), title: "戻す (Ctrl+Z)", "\u{21B6}" }
+                button { class: "toolbar-btn keep-visible", disabled: !can_redo, onclick: move |_| on_redo.call(()), title: "やり直し (Ctrl+Y)", "\u{21B7}" }
                 button { class: "toolbar-btn keep-visible", disabled: proj_name.is_empty(), onclick: move |_| on_save.call(()), "保存" }
                 button { class: "toolbar-btn keep-visible", onclick: move |_| on_settings.call(()), "設定" }
                 button { class: "toolbar-btn toolbar-overflow-btn", onclick: move |_| { let v = !*show_overflow.read(); show_overflow.set(v); }, "\u{22EE}" }

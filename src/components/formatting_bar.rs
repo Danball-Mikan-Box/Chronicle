@@ -55,7 +55,7 @@ pub fn FormattingBar(on_format: EventHandler<FormatKind>) -> Element {
             div { class: "fmt-help",
                 p { "エディタで文字を入力し、範囲を選択（ドラッグ）してからボタンを押すとMarkdown書式が挿入されます" }
                 p { "何も選択せずにボタンを押すと、その位置に見本テキストが挿入されます" }
-                p { "ショートカット: Ctrl+B = 太字, Ctrl+I = 斜体, Ctrl+S = 保存" }
+                p { "ショートカット: Ctrl+B = 太字, Ctrl+I = 斜体, Ctrl+S = 保存, Ctrl+Z = 戻す, Ctrl+Y = やり直し" }
                 p { "右側のプレビューでMarkdownの結果を確認できます" }
             }
         }

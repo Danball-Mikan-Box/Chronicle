@@ -231,6 +231,13 @@ pub fn App() -> Element {
     let is_saved = use_signal(|| true);
     let mut tab_dirty: Signal<HashSet<DocRef>> = use_signal(|| HashSet::new());
     let mut tab_close_pending: Signal<Option<DocRef>> = use_signal(|| None);
+
+    // Undo/redo
+    let undo_stack: Signal<Vec<String>> = use_signal(Vec::new);
+    let redo_stack: Signal<Vec<String>> = use_signal(Vec::new);
+    let undo_snapshot: Signal<String> = use_signal(String::new);
+    let is_undo_redo: Signal<bool> = use_signal(|| false);
+    let undo_gen: std::cell::Cell<u64> = use_hook(|| std::cell::Cell::new(0));
     {
         let is_saved = is_saved.clone();
         let active_tab = active_tab.clone();
@@ -524,6 +531,9 @@ pub fn App() -> Element {
         let mut content_sig = content.clone();
         let mut other_files_total = other_files_total.clone();
         let mut is_saved = is_saved.clone();
+        let mut undo_stack = undo_stack.clone();
+        let mut redo_stack = redo_stack.clone();
+        let mut undo_snapshot = undo_snapshot.clone();
         move |doc: DocRef| {
             if let Some(ref p) = *project.read() {
                 other_files_total.set(get_other_files_total(p, &Some(doc.clone())));
@@ -548,10 +558,14 @@ pub fn App() -> Element {
 
             active_tab.set(Some(doc.clone()));
             if let Some(text) = tab_content.read().get(&doc).cloned() {
-                content_sig.set(text);
+                content_sig.set(text.clone());
+                undo_snapshot.set(text);
             } else {
                 content_sig.set(String::new());
+                undo_snapshot.set(String::new());
             }
+            undo_stack.set(Vec::new());
+            redo_stack.set(Vec::new());
             is_saved.set(true);
             let next = *chapter_version.read() + 1;
             chapter_version.set(next);
@@ -573,6 +587,9 @@ pub fn App() -> Element {
         let mut chapter_version = chapter_version.clone();
         let mut is_saved = is_saved.clone();
         let mut tab_dirty = tab_dirty.clone();
+        let mut undo_stack = undo_stack.clone();
+        let mut redo_stack = redo_stack.clone();
+        let mut undo_snapshot = undo_snapshot.clone();
         move |doc: DocRef| {
             tab_dirty.write().remove(&doc);
             tab_content.write().remove(&doc);
@@ -582,6 +599,9 @@ pub fn App() -> Element {
             if tabs.is_empty() {
                 active_tab.set(None);
                 content_sig.set(String::new());
+                undo_snapshot.set(String::new());
+                undo_stack.set(Vec::new());
+                redo_stack.set(Vec::new());
                 is_saved.set(true);
             } else if Some(&doc) == active_tab.read().as_ref() {
                 let new_idx = idx.unwrap_or(0).min(tabs.len().saturating_sub(1));
@@ -659,11 +679,17 @@ pub fn App() -> Element {
         let mut active_tab = active_tab.clone();
         let mut content_sig = content.clone();
         let mut is_saved = is_saved.clone();
+        let mut undo_stack = undo_stack.clone();
+        let mut redo_stack = redo_stack.clone();
+        let mut undo_snapshot = undo_snapshot.clone();
         move || {
             project.set(None);
             open_tabs.set(Vec::new());
             active_tab.set(None);
             content_sig.set(String::new());
+            undo_snapshot.set(String::new());
+            undo_stack.set(Vec::new());
+            redo_stack.set(Vec::new());
             is_saved.set(true);
             fs::settings::save_last_project_path(None);
         }
@@ -980,6 +1006,54 @@ pub fn App() -> Element {
         let mut gs = global_settings.write();
         if gs.font_size > 8 { gs.font_size -= 1; }
         let _ = fs::settings::save_global_settings(&gs);
+    };
+
+    let on_undo = {
+        let mut content = content.clone();
+        let mut undo_stack = undo_stack.clone();
+        let mut redo_stack = redo_stack.clone();
+        let mut undo_snapshot = undo_snapshot.clone();
+        let mut is_undo_redo = is_undo_redo.clone();
+        let mut is_undo_saved = is_saved.clone();
+        move |_| {
+            let snapshot = undo_stack.write().pop();
+            if let Some(prev) = snapshot {
+                let current = content.read().clone();
+                redo_stack.write().push(current);
+                *is_undo_redo.write() = true;
+                content.set(prev.clone());
+                undo_snapshot.set(prev);
+                is_undo_saved.set(false);
+                let mut is_undo_redo = is_undo_redo.clone();
+                spawn(async move {
+                    is_undo_redo.set(false);
+                });
+            }
+        }
+    };
+
+    let on_redo = {
+        let mut content = content.clone();
+        let mut undo_stack = undo_stack.clone();
+        let mut redo_stack = redo_stack.clone();
+        let mut undo_snapshot = undo_snapshot.clone();
+        let mut is_undo_redo = is_undo_redo.clone();
+        let mut is_redo_saved = is_saved.clone();
+        move |_| {
+            let snapshot = redo_stack.write().pop();
+            if let Some(next) = snapshot {
+                let current = content.read().clone();
+                undo_stack.write().push(current);
+                *is_undo_redo.write() = true;
+                content.set(next.clone());
+                undo_snapshot.set(next);
+                is_redo_saved.set(false);
+                let mut is_undo_redo = is_undo_redo.clone();
+                spawn(async move {
+                    is_undo_redo.set(false);
+                });
+            }
+        }
     };
 
     let on_close_project = {
@@ -1504,6 +1578,48 @@ pub fn App() -> Element {
         }
     });
 
+    // ── Debounced undo recording ──
+
+    {
+        let content = content.clone();
+        let undo_stack = undo_stack.clone();
+        let redo_stack = redo_stack.clone();
+        let undo_snapshot = undo_snapshot.clone();
+        let is_undo_redo = is_undo_redo.clone();
+        let undo_gen = undo_gen.clone();
+
+        use_effect(move || {
+            if *is_undo_redo.read() { return; }
+            let cur = content.read().clone();
+            if cur == *undo_snapshot.peek() { return; }
+
+            let g = undo_gen.get() + 1;
+            undo_gen.set(g);
+            let snapshot = undo_snapshot.peek().clone();
+
+            let mut undo_stack = undo_stack.clone();
+            let mut redo_stack = redo_stack.clone();
+            let mut undo_snapshot = undo_snapshot.clone();
+            let gen_cell = undo_gen.clone();
+            let content_clone = content.clone();
+
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                if gen_cell.get() != g { return; }
+                let current = content_clone.read().clone();
+                if current != *undo_snapshot.peek() {
+                    let mut stack = undo_stack.write();
+                    stack.push(snapshot);
+                    if stack.len() > 100 {
+                        stack.remove(0);
+                    }
+                    *undo_snapshot.write() = current;
+                    redo_stack.set(Vec::new());
+                }
+            });
+        });
+    }
+
     // ── Auto-save ──
 
     let auto_save = auto_save_enabled.clone();
@@ -1586,6 +1702,8 @@ pub fn App() -> Element {
     let recent_list = recent_projects.read().clone();
     let has_project = project.read().is_some();
     let proj_name_for_welcome = project.read().as_ref().map(|p| p.name.clone()).unwrap_or_default();
+    let can_undo = !undo_stack.read().is_empty() && has_project;
+    let can_redo = !redo_stack.read().is_empty() && has_project;
 
     // Derive current content from active tab for editor
     let editor_placeholder = match active_tab.read().as_ref() {
@@ -1633,6 +1751,8 @@ pub fn App() -> Element {
                         global_settings: global_settings,
                         is_saved: is_saved,
                         on_save: on_save,
+                        on_undo: on_undo,
+                        on_redo: on_redo,
                         focus_mode: focus_mode,
                         placeholder: editor_placeholder,
                     }
@@ -1752,6 +1872,8 @@ pub fn App() -> Element {
                                     global_settings: global_settings,
                                     is_saved: is_saved,
                                     on_save: on_save,
+                                    on_undo: on_undo,
+                                    on_redo: on_redo,
                                     focus_mode: focus_mode,
                                     placeholder: mobile_placeholder,
                                 }
@@ -1898,6 +2020,10 @@ pub fn App() -> Element {
                 on_import_project: on_import_project,
                 on_close_project: on_close_project,
                 on_save: on_save,
+                on_undo: on_undo,
+                on_redo: on_redo,
+                can_undo: can_undo,
+                can_redo: can_redo,
                 on_export: on_export,
                 on_toggle_dark: on_toggle_dark,
                 is_dark: *is_dark.read(),
